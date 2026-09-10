@@ -1,0 +1,23 @@
+-- Prado's Tour / Supabase
+-- CORREÇÃO: permissão mínima de leitura em public.profiles para o login.
+--
+-- CONTEXTO
+--   As migrations 002 (DDL) e 004 (RLS) criaram a tabela public.profiles e
+--   habilitaram RLS com a policy `profiles_self`, porém nenhuma migration
+--   emitiu GRANT de tabela. Sem GRANT, o PostgREST responde
+--   "42501 permission denied for table profiles" para todas as roles.
+--   Isso faz getSupabaseSessionUser()/middleware retornarem null após um
+--   signInWithPassword bem-sucedido, exibindo "E-mail ou senha inválidos."
+--   no login mesmo com credenciais corretas.
+--
+-- ESCOPO
+--   Concede exclusivamente SELECT para a role `authenticated` (usuário logado,
+--   que é quem resolve a sessão/sessão de negócio no login). O RLS continuará
+--   filtrando linhas pela policy `profiles_self` (id = auth.uid() ou staff).
+--   Nenhum grant para anon; nenhuma alteração em policies, usuários ou dados.
+--
+-- IDEMPOTÊNCIA
+--   GRANT não falha ao ser reexecutado.
+--   Pré-requisitos: 002 (DDL) e 004 (RLS) já aplicadas.
+
+grant select on table public.profiles to authenticated;

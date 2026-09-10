@@ -1,0 +1,161 @@
+import "server-only";
+
+import { createClient } from "@supabase/supabase-js";
+import { v4 as uuid } from "uuid";
+import { getSupabaseEnvironment, assertSupabaseServerConfiguration } from "@/lib/supabase/config";
+import { getPublicSiteUrl } from "@/lib/env/public";
+import { createServerSupabaseClient } from "./supabase-session";
+
+/**
+ * Ações de autenticação via Supabase Auth.
+ *
+ * São chamadas quando AUTH_DRIVER for "supabase". Autenticam a sessão SSR com
+ * credenciais fornecidas pelo usuário e criam contas reais no Supabase Auth
+ * (o perfil correspondente é criado pelo trigger `handle_new_user`). Não cria
+ * usuários fictícios: cada conta vem de um cadastro real do site.
+ */
+
+type EmailPasswordResult =
+  | { status: "ok" }
+  | { status: "error"; message: string }
+  | { status: "missing-configuration" };
+
+/**
+ * Autentica e-mail/senha contra o Supabase Auth, emitindo os cookies `sb-*`
+ * via cliente SSR. Não consulta nem grava perfis de negócio.
+ */
+export async function authenticateWithEmailPassword(
+  email: string,
+  password: string,
+): Promise<EmailPasswordResult> {
+  if (!getSupabaseEnvironment().hasBrowserCredentials) {
+    return { status: "missing-configuration" };
+  }
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) return { status: "error", message: error.message };
+  return { status: "ok" };
+}
+
+/**
+ * Dispara o fluxo de recuperação de senha do Supabase Auth (e-mail com link).
+ * Não revela se o e-mail existe; erros são mascarados com resposta genérica.
+ */
+export async function requestSupabasePasswordReset(email: string) {
+  if (!getSupabaseEnvironment().hasBrowserCredentials) return;
+  const supabase = await createServerSupabaseClient();
+  const siteUrl = getPublicSiteUrl();
+  const options = siteUrl
+    ? { redirectTo: `${siteUrl}/redefinir-senha` }
+    : undefined;
+  try {
+    // Sem URL pública configurada, segue o padrão (redireciona para a SITE_URL
+    // definida no Supabase). Nenhum e-mail é revelado como inexistente.
+    await supabase.auth.resetPasswordForEmail(email, options);
+  } catch (error) {
+    console.error("[requestSupabasePasswordReset] falha ao disparar reset:", error);
+  }
+}
+
+export type RegisterInput = {
+  fullName: string;
+  cpf: string;
+  birthDate: string;
+  email: string;
+  phone: string;
+  whatsapp: string;
+  password: string;
+};
+
+/**
+ * Cria uma conta real no Supabase Auth (service role, server-only).
+ * O trigger `handle_new_user` cria o profile a partir de `raw_user_meta_data`
+ * (chaves: nome, cpf, nascimento, telefone, whatsapp) com role CLIENTE e
+ * customer_class NOVO. Aqui apenas completamos referral_code e registros de
+ * apoio (notificação + audit log). CPF/e-mail duplicados são rejeitados.
+ */
+export async function registerWithSupabase(data: RegisterInput) {
+  const { url, serviceRoleKey } = assertSupabaseServerConfiguration();
+  const admin = createClient(url, serviceRoleKey, {
+    auth: { autoRefreshToken: false, persistSession: false },
+  });
+
+  const { data: duplicate } = await admin
+    .from("profiles")
+    .select("id")
+    .or(`cpf.eq.${data.cpf},email.eq.${data.email}`)
+    .limit(1)
+    .maybeSingle();
+  if (duplicate) throw new Error("CPF ou e-mail já cadastrado.");
+
+  const { data: responseData, error } = await admin.auth.admin.createUser({
+    email: data.email,
+    password: data.password,
+    email_confirm: true,
+    user_metadata: {
+      nome: data.fullName.trim(),
+      cpf: data.cpf,
+      nascimento: data.birthDate,
+      telefone: data.phone,
+      whatsapp: data.whatsapp,
+    },
+  });
+
+  if (error) {
+    if (error.message.toLowerCase().includes("already registered")) {
+      throw new Error("E-mail já cadastrado.");
+    }
+    throw new Error("Erro ao cadastrar. Tente novamente.");
+  }
+  const created = responseData?.user;
+  if (!created?.id) throw new Error("Erro ao cadastrar. Tente novamente.");
+
+  const id = created.id;
+  const now = new Date().toISOString();
+  let referralCode = "";
+  try {
+    referralCode =
+      data.fullName.split(" ")[0].toUpperCase().slice(0, 8) +
+      Math.floor(Math.random() * 90 + 10);
+    await admin
+      .from("profiles")
+      .update({ referral_code: referralCode, updated_at: now })
+      .eq("id", id);
+  } catch {
+    referralCode = "";
+  }
+
+  await admin.from("notifications").insert({
+    id: uuid(),
+    user_id: id,
+    title: "Bem-vindo à Prado's Tour",
+    message: "Sua conta foi criada com sucesso. Explore as próximas excursões!",
+    type: "CADASTRO",
+    read: false,
+    created_at: now,
+  });
+  await admin.from("audit_logs").insert({
+    id: uuid(),
+    user_id: id,
+    action: "REGISTER",
+    entity: "profiles",
+    entity_id: id,
+    old_value: null,
+    new_value: { email: data.email, referralCode },
+    ip: null,
+    created_at: now,
+  });
+
+  return created;
+}
+
+/**
+ * Estabelece a sessão SSR (cookies sb-*) logo após o cadastro, dispensando um
+ * segundo login manual.
+ */
+export async function signInAfterRegister(email: string, password: string) {
+  const supabase = await createServerSupabaseClient();
+  const { error } = await supabase.auth.signInWithPassword({ email, password });
+  if (error) return { status: "error" as const, message: error.message };
+  return { status: "ok" as const };
+}

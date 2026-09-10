@@ -1,0 +1,83 @@
+-- Prado's Tour / FASE 6 - ETAPA 2 (dados de negócio) - gerado automaticamente
+-- store.json md5: 4d8d27feb20f50583e129c1a3c5260dc
+-- Idempotente: INSERT ... ON CONFLICT (id) DO NOTHING. Preserva ids. Sem DELETE.
+-- bloqueio de geração (auth-map/trips excluídas): 8
+-- PRÉ-REQUISITO: Etapa 1 (006_phase6_stage1_catalog.sql) e profiles/perfis de auth (Etapa 0).
+
+begin;
+
+-- 1) profiles (apenas mapeados; role do banco preservada em UPDATE)
+insert into public.profiles (id, full_name, cpf, birth_date, email, phone, whatsapp, role, customer_class, referral_code, created_at, updated_at) values
+  ('1c2bb5f7-6e73-4fcc-9d98-b1195ebf1bf8', 'Mayara Prado', '11144477735', '1990-05-12', 'admin@pradostour.com', '11998639502', '11998639502', 'SUPER_ADMIN', 'VIP', 'MAYARA10', '2026-09-05T03:14:00.830Z'::timestamptz, '2026-09-05T03:14:00.830Z'::timestamptz)
+on conflict (id) do update set full_name = excluded.full_name, cpf = excluded.cpf, birth_date = excluded.birth_date, phone = excluded.phone, whatsapp = excluded.whatsapp, referral_code = excluded.referral_code, customer_class = excluded.customer_class, updated_at = excluded.updated_at;
+-- 2) sellers
+-- 3) bookings
+
+insert into public.bookings (id, reference, customer_id, trip_id, seller_id, quantity, boarding_point_id, boarding_point, total_amount, base_amount, discount_amount, coupon_code, payment_plan, status, notes, created_at, updated_at) values
+  ('eab8b1ee-9bf8-4e96-8364-41cf08238991', 'PT000006', '1c2bb5f7-6e73-4fcc-9d98-b1195ebf1bf8', 'fe08b44a-4d86-4ba6-89c2-df227fbb1a3e', NULL, 1, '767f4983-2497-461c-9d8d-f98257c98486', 'Ginásio de Esportes do Polvilho', 150, 150, 0, NULL, 'TOTAL', 'CONFIRMADA', NULL, '2026-09-05T19:55:54.778Z'::timestamptz, '2026-09-05T20:42:55.923Z'::timestamptz)
+on conflict (id) do nothing;
+-- 4) seats com booking (ocultados na Etapa 1)
+-- 5) booking_passengers
+
+insert into public.booking_passengers (id, booking_id, name, cpf, birth_date, phone, seat_id, boarding_point_id, seat_group, seat_assignment_status, travel_together, group_id, group_name, observations) values
+  ('613b2ff7-3ed0-4615-b23f-e759e3be967c', 'eab8b1ee-9bf8-4e96-8364-41cf08238991', 'Mayara Prado', '3312313131313', NULL, '11998639502', NULL, '767f4983-2497-461c-9d8d-f98257c98486', 'SEPARADO-1', 'PENDENTE', true, NULL, NULL, NULL)
+on conflict (id) do nothing;
+-- 6) payments
+
+insert into public.payments (id, booking_id, customer_id, method, plan, amount, status, gateway, gateway_payment_id, fee_amount, net_amount, paid_at, pix_copy_paste, metadata, created_at) values
+  ('55ba9b4a-d53a-47af-b317-093f7efd6da3', 'eab8b1ee-9bf8-4e96-8364-41cf08238991', '1c2bb5f7-6e73-4fcc-9d98-b1195ebf1bf8', 'CARTAO', 'TOTAL', 150, 'PAGO', 'demo-card', 'gw_55ba9b4a', 0, 150, '2026-09-05T20:42:55.923Z'::timestamptz, NULL, '{"awaitingWebhook":true}'::jsonb, '2026-09-05T19:55:54.778Z'::timestamptz)
+on conflict (id) do nothing;
+-- 7) payment_installments
+
+insert into public.payment_installments (id, booking_id, number, value, due_date, status, paid_at, method) values
+  ('483b58d5-5870-43d5-bd7f-001220f86e24', 'eab8b1ee-9bf8-4e96-8364-41cf08238991', 1, 30, '2026-09-05', 'PAGO', '2026-09-05T20:42:55.923Z'::timestamptz, 'CARTAO'),
+  ('db07852c-ed5d-4d9b-a7fe-011463830a1e', 'eab8b1ee-9bf8-4e96-8364-41cf08238991', 2, 30, '2026-10-05', 'PENDENTE', NULL, 'CARTAO'),
+  ('43e7333e-979d-40d7-86f7-f95c87a99f85', 'eab8b1ee-9bf8-4e96-8364-41cf08238991', 3, 30, '2026-11-05', 'PENDENTE', NULL, 'CARTAO'),
+  ('b60657ee-b807-4fe6-bb17-d688534aa2e1', 'eab8b1ee-9bf8-4e96-8364-41cf08238991', 4, 30, '2026-12-05', 'PENDENTE', NULL, 'CARTAO'),
+  ('3eeb1a65-c270-46c9-b015-47ce0fec2cb3', 'eab8b1ee-9bf8-4e96-8364-41cf08238991', 5, 30, '2027-01-05', 'PENDENTE', NULL, 'CARTAO')
+on conflict (id) do nothing;
+-- 8) coupon_usages
+-- 9) commissions
+-- 10) expenses
+-- 11) notifications
+
+insert into public.notifications (id, user_id, title, message, type, read, created_at) values
+  ('6569d85d-080f-46af-bcc5-ea0ad13db644', '1c2bb5f7-6e73-4fcc-9d98-b1195ebf1bf8', 'Reserva criada', 'Sua reserva PT000002 foi criada e aguarda confirmação de pagamento.', 'RESERVA', false, '2026-09-05T17:45:40.776Z'::timestamptz),
+  ('cef56c58-7f70-4db0-abed-6d4c0a4eb133', '1c2bb5f7-6e73-4fcc-9d98-b1195ebf1bf8', 'Pagamento confirmado', 'Pagamento da reserva PT000002 confirmado. Seu voucher já está disponível.', 'PAGAMENTO', false, '2026-09-05T17:47:19.495Z'::timestamptz),
+  ('3351f9b8-0968-4dee-a6b9-0c2f9182ec67', '1c2bb5f7-6e73-4fcc-9d98-b1195ebf1bf8', 'Reserva criada', 'Sua reserva PT000003 foi criada e aguarda confirmação de pagamento.', 'RESERVA', false, '2026-09-05T18:46:52.180Z'::timestamptz),
+  ('045b53d2-108a-4c57-967a-b9c5f5737a4b', '1c2bb5f7-6e73-4fcc-9d98-b1195ebf1bf8', 'Reserva criada', 'Sua reserva PT000004 foi criada e aguarda confirmação de pagamento.', 'RESERVA', false, '2026-09-05T19:04:52.639Z'::timestamptz),
+  ('6caa882b-25ec-4757-917d-3f5831291563', '1c2bb5f7-6e73-4fcc-9d98-b1195ebf1bf8', 'Reserva criada', 'Sua reserva PT000005 foi criada e aguarda confirmação de pagamento.', 'RESERVA', false, '2026-09-05T19:48:08.559Z'::timestamptz),
+  ('d4ad393c-413e-46dc-8a22-14f91ed4809b', '1c2bb5f7-6e73-4fcc-9d98-b1195ebf1bf8', 'Reserva criada', 'Sua reserva PT000006 foi criada e aguarda confirmação de pagamento.', 'RESERVA', false, '2026-09-05T19:55:54.778Z'::timestamptz),
+  ('812e66a9-fe47-472d-a26f-59681c098df5', '1c2bb5f7-6e73-4fcc-9d98-b1195ebf1bf8', 'Pagamento confirmado', 'Pagamento da reserva PT000003 confirmado. Seu voucher já está disponível.', 'PAGAMENTO', false, '2026-09-05T20:42:50.914Z'::timestamptz),
+  ('970105b8-7338-4a3a-8b77-0dfe8e4d377d', '1c2bb5f7-6e73-4fcc-9d98-b1195ebf1bf8', 'Pagamento confirmado', 'Pagamento da reserva PT000004 confirmado. Seu voucher já está disponível.', 'PAGAMENTO', false, '2026-09-05T20:42:53.095Z'::timestamptz),
+  ('6d2ec72a-1183-44cc-a2cf-dc11da7626ec', '1c2bb5f7-6e73-4fcc-9d98-b1195ebf1bf8', 'Pagamento confirmado', 'Pagamento da reserva PT000005 confirmado. Seu voucher já está disponível.', 'PAGAMENTO', false, '2026-09-05T20:42:54.507Z'::timestamptz),
+  ('10c15e8c-e682-4d76-a704-e7dec97da513', '1c2bb5f7-6e73-4fcc-9d98-b1195ebf1bf8', 'Pagamento confirmado', 'Pagamento da reserva PT000006 confirmado. Seu voucher já está disponível.', 'PAGAMENTO', false, '2026-09-05T20:42:55.923Z'::timestamptz)
+on conflict (id) do nothing;
+-- 12) reviews
+select 1; -- nenhum review (0 no store)
+-- 13) loyalty_points
+
+insert into public.loyalty_points (id, customer_id, points, source, booking_id, created_at) values
+  ('3da66ee9-0ab4-465b-a177-c3fa5f9fd2a9', '1c2bb5f7-6e73-4fcc-9d98-b1195ebf1bf8', 150, 'PAGAMENTO', 'eab8b1ee-9bf8-4e96-8364-41cf08238991', '2026-09-05T20:42:55.923Z'::timestamptz)
+on conflict (id) do nothing;
+-- 14) referrals
+select 1; -- nenhum referral (0 no store)
+
+-- 15) audit_logs
+
+insert into public.audit_logs (id, user_id, action, entity, entity_id, old_value, new_value, ip, created_at) values
+  ('7c970cff-20cb-4c55-8393-ef2e5b20a083', '1c2bb5f7-6e73-4fcc-9d98-b1195ebf1bf8', 'UPLOAD_BRAND_BANNER', 'settings', 'brand', '{"companyName":"Prado''s Tour","primary":"#E84C91","secondary":"#F28C28","background":"#FAF7F8","font":"Outfit","fontSize":"16","whatsapp":"5511998639502","instagram":"pradostour","email":"contato@pradostour.com","logoUrl":"/images/logo.png","bannerUrl":"/images/guaruja.png","faviconUrl":"/favicon.ico"}'::jsonb, '{"companyName":"Prado''s Tour","primary":"#E84C91","secondary":"#F28C28","background":"#FAF7F8","font":"Outfit","fontSize":"16","whatsapp":"5511998639502","instagram":"pradostour","email":"contato@pradostour.com","logoUrl":"/images/logo.png","bannerUrl":"/uploads/brand/banner-1788628198349.png","faviconUrl":"/favicon.ico"}'::jsonb, NULL, '2026-09-05T17:09:58.363Z'::timestamptz),
+  ('3330d582-20b2-4513-9d73-ad21237044df', '1c2bb5f7-6e73-4fcc-9d98-b1195ebf1bf8', 'UPDATE_BRAND', 'settings', 'brand', '{"companyName":"Prado''s Tour","primary":"#E84C91","secondary":"#F28C28","background":"#FAF7F8","font":"Outfit","fontSize":"16","whatsapp":"5511998639502","instagram":"pradostour","email":"contato@pradostour.com","logoUrl":"/images/logo.png","bannerUrl":"/uploads/brand/banner-1788628198349.png","faviconUrl":"/favicon.ico"}'::jsonb, '{"companyName":"Prado''s Tour","primary":"#e84c91","secondary":"#f28c28","background":"#efd7df","font":"Outfit","fontSize":"16","whatsapp":"5511998639502  ","instagram":"@pradostour","email":"contato@pradostour.com","logoUrl":"/images/logo.png","bannerUrl":"/uploads/brand/banner-1788628198349.png","faviconUrl":"/favicon.ico"}'::jsonb, NULL, '2026-09-05T17:11:10.182Z'::timestamptz),
+  ('88206f1e-4725-4bcc-a601-5dee75feac56', '1c2bb5f7-6e73-4fcc-9d98-b1195ebf1bf8', 'CREATE_BOOKING', 'bookings', 'eab8b1ee-9bf8-4e96-8364-41cf08238991', NULL, '{"reference":"PT000006","total":150}'::jsonb, NULL, '2026-09-05T19:55:54.778Z'::timestamptz),
+  ('ef06430b-94b8-489b-b332-3dd1e1a853ae', '973fa250-ce8f-4762-95fd-ef3c733178f3', 'UPDATE_BRAND', 'settings', 'brand', '{"companyName":"Prado''s Tour","primary":"#e84c91","secondary":"#f28c28","background":"#efd7df","font":"Outfit","fontSize":"16","whatsapp":"5511998639502  ","instagram":"@pradostour","email":"contato@pradostour.com","logoUrl":"/images/logo.png","bannerUrl":"/uploads/brand/banner-1788628198349.png","faviconUrl":"/favicon.ico"}'::jsonb, '{"companyName":"Prado''s Tour","primary":"#4de84a","secondary":"#f22626","background":"#e1f0db","font":"Outfit","fontSize":"16","whatsapp":"5511998639502  ","instagram":"@pradostour","email":"contato@pradostour.com","logoUrl":"/images/logo.png","bannerUrl":"/uploads/brand/banner-1788628198349.png","faviconUrl":"/favicon.ico"}'::jsonb, NULL, '2026-09-09T02:07:17.331Z'::timestamptz),
+  ('a522ba0c-5ebf-46ea-a699-60314b715ecb', '973fa250-ce8f-4762-95fd-ef3c733178f3', 'UPDATE_BRAND', 'settings', 'brand', '{"companyName":"Prado''s Tour","primary":"#4de84a","secondary":"#f22626","background":"#e1f0db","font":"Outfit","fontSize":"16","whatsapp":"5511998639502  ","instagram":"@pradostour","email":"contato@pradostour.com","logoUrl":"/images/logo.png","bannerUrl":"/uploads/brand/banner-1788628198349.png","faviconUrl":"/favicon.ico"}'::jsonb, '{"companyName":"Prado''s Tour","primary":"#4de84a","secondary":"#f22626","background":"#e1f0db","font":"Outfit","fontSize":"16","whatsapp":"5511998639502  ","instagram":"@pradostour","email":"contato@pradostour.com","logoUrl":"/images/logo.png","bannerUrl":"/uploads/brand/banner-1788628198349.png","faviconUrl":"/favicon.ico"}'::jsonb, NULL, '2026-09-09T02:07:22.218Z'::timestamptz),
+  ('9528071b-9863-4601-845d-e017624db364', '973fa250-ce8f-4762-95fd-ef3c733178f3', 'UPDATE_BRAND', 'settings', 'brand', '{"companyName":"Prado''s Tour","primary":"#4de84a","secondary":"#f22626","background":"#e1f0db","font":"Outfit","fontSize":"16","whatsapp":"5511998639502  ","instagram":"@pradostour","email":"contato@pradostour.com","logoUrl":"/images/logo.png","bannerUrl":"/uploads/brand/banner-1788628198349.png","faviconUrl":"/favicon.ico"}'::jsonb, '{"companyName":"Prado''s Tour","primary":"#4de84a","secondary":"#f22626","background":"#e1f0db","font":"Outfit","fontSize":"16","whatsapp":"5511998639502  ","instagram":"@pradostour","email":"contato@pradostour.com","logoUrl":"/images/logo.png","bannerUrl":"/uploads/brand/banner-1788628198349.png","faviconUrl":"/favicon.ico"}'::jsonb, NULL, '2026-09-09T02:07:28.060Z'::timestamptz),
+  ('d9ee7712-45cb-4df3-acd6-c02134e739ec', '973fa250-ce8f-4762-95fd-ef3c733178f3', 'UPDATE_BRAND', 'settings', 'brand', '{"companyName":"Prado''s Tour","primary":"#4de84a","secondary":"#f22626","background":"#e1f0db","font":"Outfit","fontSize":"16","whatsapp":"5511998639502  ","instagram":"@pradostour","email":"contato@pradostour.com","logoUrl":"/images/logo.png","bannerUrl":"/uploads/brand/banner-1788628198349.png","faviconUrl":"/favicon.ico"}'::jsonb, '{"companyName":"Prado''s Tour","primary":"#4de84a","secondary":"#f22626","background":"#e1f0db","font":"Outfit","fontSize":"16","whatsapp":"5511998639502  ","instagram":"@pradostour","email":"contato@pradostour.com","logoUrl":"/images/logo.png","bannerUrl":"/uploads/brand/banner-1788628198349.png","faviconUrl":"/favicon.ico"}'::jsonb, NULL, '2026-09-09T02:08:17.134Z'::timestamptz),
+  ('622b5064-4322-4369-bcac-786a366a534d', '973fa250-ce8f-4762-95fd-ef3c733178f3', 'UPDATE_BRAND', 'settings', 'brand', '{"companyName":"Prado''s Tour","primary":"#4de84a","secondary":"#f22626","background":"#e1f0db","font":"Outfit","fontSize":"16","whatsapp":"5511998639502  ","instagram":"@pradostour","email":"contato@pradostour.com","logoUrl":"/images/logo.png","bannerUrl":"/uploads/brand/banner-1788628198349.png","faviconUrl":"/favicon.ico"}'::jsonb, '{"companyName":"Prado''s Tour","primary":"#4de84a","secondary":"#f22626","background":"#e1f0db","font":"Outfit","fontSize":"16","whatsapp":"5511998639502  ","instagram":"@pradostour","email":"contato@pradostour.com","logoUrl":"/images/logo.png","bannerUrl":"/uploads/brand/banner-1788628198349.png","faviconUrl":"/favicon.ico"}'::jsonb, NULL, '2026-09-09T02:08:17.901Z'::timestamptz),
+  ('15909765-7b3b-4384-8f0b-d0d217daecde', '973fa250-ce8f-4762-95fd-ef3c733178f3', 'UPDATE_BRAND', 'settings', 'brand', '{"companyName":"Prado''s Tour","primary":"#4de84a","secondary":"#f22626","background":"#e1f0db","font":"Outfit","fontSize":"16","whatsapp":"5511998639502  ","instagram":"@pradostour","email":"contato@pradostour.com","logoUrl":"/images/logo.png","bannerUrl":"/uploads/brand/banner-1788628198349.png","faviconUrl":"/favicon.ico"}'::jsonb, '{"companyName":"Prado''s Tour","primary":"#4de84a","secondary":"#f22626","background":"#e1f0db","font":"Outfit","fontSize":"16","whatsapp":"5511998639502  ","instagram":"@pradostour","email":"contato@pradostour.com","logoUrl":"/images/logo.png","bannerUrl":"/uploads/brand/banner-1788628198349.png","faviconUrl":"/favicon.ico"}'::jsonb, NULL, '2026-09-09T02:08:18.534Z'::timestamptz),
+  ('554d288c-dcb2-4c7b-8cb4-e545eddb706a', '973fa250-ce8f-4762-95fd-ef3c733178f3', 'UPDATE_BRAND', 'settings', 'brand', '{"companyName":"Prado''s Tour","primary":"#4de84a","secondary":"#f22626","background":"#e1f0db","font":"Outfit","fontSize":"16","whatsapp":"5511998639502  ","instagram":"@pradostour","email":"contato@pradostour.com","logoUrl":"/images/logo.png","bannerUrl":"/uploads/brand/banner-1788628198349.png","faviconUrl":"/favicon.ico"}'::jsonb, '{"companyName":"Prado''s Tour","primary":"#4de84a","secondary":"#f22626","background":"#e1f0db","font":"Outfit","fontSize":"16","whatsapp":"5511998639502  ","instagram":"@pradostour","email":"contato@pradostour.com","logoUrl":"/images/logo.png","bannerUrl":"/uploads/brand/banner-1788628198349.png","faviconUrl":"/favicon.ico"}'::jsonb, NULL, '2026-09-09T02:08:19.497Z'::timestamptz),
+  ('fcf9c2fb-8750-48f4-88a7-22fe0eeb8822', '973fa250-ce8f-4762-95fd-ef3c733178f3', 'UPDATE_BRAND', 'settings', 'brand', '{"companyName":"Prado''s Tour","primary":"#4de84a","secondary":"#f22626","background":"#e1f0db","font":"Outfit","fontSize":"16","whatsapp":"5511998639502  ","instagram":"@pradostour","email":"contato@pradostour.com","logoUrl":"/images/logo.png","bannerUrl":"/uploads/brand/banner-1788628198349.png","faviconUrl":"/favicon.ico"}'::jsonb, '{"companyName":"Prado''s Tour","primary":"#4de84a","secondary":"#f22626","background":"#e1f0db","font":"Outfit","fontSize":"16","whatsapp":"5511998639502  ","instagram":"@pradostour","email":"contato@pradostour.com","logoUrl":"/images/logo.png","bannerUrl":"/uploads/brand/banner-1788628198349.png","faviconUrl":"/favicon.ico"}'::jsonb, NULL, '2026-09-09T02:08:20.375Z'::timestamptz),
+  ('987ea29e-7d96-4105-9631-90fa462a62a8', '973fa250-ce8f-4762-95fd-ef3c733178f3', 'UPDATE_BRAND', 'settings', 'brand', '{"companyName":"Prado''s Tour","primary":"#4de84a","secondary":"#f22626","background":"#e1f0db","font":"Outfit","fontSize":"16","whatsapp":"5511998639502  ","instagram":"@pradostour","email":"contato@pradostour.com","logoUrl":"/images/logo.png","bannerUrl":"/uploads/brand/banner-1788628198349.png","faviconUrl":"/favicon.ico"}'::jsonb, '{"companyName":"Prado''s Tour","primary":"#4de84a","secondary":"#f22626","background":"#e1f0db","font":"Outfit","fontSize":"16","whatsapp":"5511998639502  ","instagram":"@pradostour","email":"contato@pradostour.com","logoUrl":"/images/logo.png","bannerUrl":"/uploads/brand/banner-1788628198349.png","faviconUrl":"/favicon.ico"}'::jsonb, NULL, '2026-09-09T02:08:21.218Z'::timestamptz)
+on conflict (id) do nothing;
+
+commit;
