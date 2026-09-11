@@ -14,10 +14,10 @@ export function LoginForm() {
   return (
     <div className="surface-card p-6 sm:p-8">
       <p className="eyebrow">Acesso</p>
-      <h1 className="mt-2 font-display text-3xl font-bold tracking-tight text-[#2F2328]">
+      <h1 className="mt-2 font-display text-3xl font-bold tracking-tight text-brand-ink">
         Entrar
       </h1>
-      <p className="mt-2 text-sm text-[#6B5B63]">Acesse sua conta Prado&apos;s Tour</p>
+      <p className="mt-2 text-sm text-brand-muted">Acesse sua conta Prado&apos;s Tour</p>
 
       <form
         className="mt-8 space-y-4"
@@ -49,19 +49,19 @@ export function LoginForm() {
         </Button>
       </form>
 
-      <div className="mt-6 space-y-2 text-sm text-[#6B5B63]">
+      <div className="mt-6 space-y-2 text-sm text-brand-muted">
         <p>
-          <Link href="/recuperar-senha" className="font-semibold text-[#E84C91] hover:underline">
+          <Link href="/recuperar-senha" className="font-semibold text-brand-primary hover:underline">
             Recuperar senha
           </Link>
         </p>
         <p>
           Não tem conta?{" "}
-          <Link href="/criar-conta" className="font-semibold text-[#E84C91] hover:underline">
+          <Link href="/criar-conta" className="font-semibold text-brand-primary hover:underline">
             Criar conta
           </Link>
         </p>
-        <p className="pt-3 text-xs leading-relaxed text-[#8A7A82]">{DEMO_PASSWORD_HINT}</p>
+        <p className="pt-3 text-xs leading-relaxed text-brand-faint">{DEMO_PASSWORD_HINT}</p>
       </div>
     </div>
   );

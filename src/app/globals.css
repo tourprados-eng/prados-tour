@@ -8,8 +8,17 @@
   --brand-muted: #6b5b63;
   --brand-line: #ebe4e7;
   --brand-surface: #ffffff;
+  --brand-tint: #fff0f6;
+  --brand-tint2: #fff6ec;
+  --brand-faint: #8a7a82;
+  --brand-deep: #c2276b;
+  --brand-grad: linear-gradient(135deg, #e84c91 0%, #f28c28 100%);
+  --brand-grad-soft: linear-gradient(135deg, #fff0f6 0%, #fff6ec 100%);
   --font-body: Arial, Helvetica, sans-serif;
   --font-display: Arial, Helvetica, sans-serif;
+  --shadow-card: 0 1px 2px rgb(47 35 40 / 0.04), 0 8px 24px -12px rgb(47 35 40 / 0.1);
+  --shadow-lift: 0 20px 45px -18px rgb(232 76 145 / 0.32), 0 8px 20px -12px rgb(47 35 40 / 0.14);
+  --shadow-glow: 0 10px 32px -10px rgb(232 76 145 / 0.5);
   --background: var(--brand-bg);
   --foreground: var(--brand-ink);
 }
@@ -17,8 +26,48 @@
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-brand-primary: var(--brand-primary);
+  --color-brand-secondary: var(--brand-secondary);
+  --color-brand-bg: var(--brand-bg);
+  --color-brand-ink: var(--brand-ink);
+  --color-brand-muted: var(--brand-muted);
+  --color-brand-line: var(--brand-line);
+  --color-brand-surface: var(--brand-surface);
+  --color-brand-tint: var(--brand-tint);
+  --color-brand-tint2: var(--brand-tint2);
+  --color-brand-faint: var(--brand-faint);
+  --color-brand-deep: var(--brand-deep);
   --font-sans: var(--font-body);
   --font-display: var(--font-display);
+}
+
+/* Utilitários da marca (compõem com variantes: hover:, group-hover:, etc.) */
+@utility shadow-card {
+  box-shadow: var(--shadow-card);
+}
+
+@utility shadow-lift {
+  box-shadow: var(--shadow-lift);
+}
+
+@utility shadow-glow {
+  box-shadow: var(--shadow-glow);
+}
+
+@utility bg-brand-grad {
+  background-image: var(--brand-grad);
+}
+
+@utility text-brand-grad {
+  background-image: var(--brand-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+}
+
+@utility chip-brand {
+  background-image: var(--brand-grad);
+  color: #fff;
 }
 
 * {
@@ -58,7 +107,7 @@ video {
 }
 
 .font-display {
-  font-family: var(--font-display), Georgia, serif;
+  font-family: var(--font-display), "Arial Rounded MT Bold", Arial, sans-serif;
 }
 
 .container-page {
@@ -88,7 +137,50 @@ video {
   background: var(--brand-surface);
   border: 1px solid var(--brand-line);
   border-radius: 1.25rem;
-  box-shadow: 0 1px 2px rgb(47 35 40 / 4%);
+  box-shadow: var(--shadow-card);
+}
+
+/* Painel de marca: bloco com gradiente oficial rosa → laranja */
+.brand-panel {
+  position: relative;
+  overflow: hidden;
+  border-radius: 1.75rem;
+  background-image: var(--brand-grad);
+  color: #fff;
+  padding: 2.5rem;
+}
+
+@media (min-width: 768px) {
+  .brand-panel {
+    padding: 3.5rem;
+  }
+}
+
+.brand-panel::before,
+.brand-panel::after {
+  content: "";
+  position: absolute;
+  border-radius: 9999px;
+  background: rgb(255 255 255 / 0.12);
+  pointer-events: none;
+}
+
+.brand-panel::before {
+  right: -5rem;
+  top: -5rem;
+  width: 15rem;
+  height: 15rem;
+}
+
+.brand-panel::after {
+  left: -4rem;
+  bottom: -7rem;
+  width: 13rem;
+  height: 13rem;
+}
+
+.brand-panel > * {
+  position: relative;
 }
 
 .eyebrow {
@@ -155,7 +247,7 @@ video {
   display: block;
   height: 100%;
   border-radius: inherit;
-  background: linear-gradient(90deg, var(--brand-primary), var(--brand-secondary));
+  background: var(--brand-grad);
   transition: width 0.35s ease;
 }
 

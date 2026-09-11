@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { requestPasswordResetAction } from "@/lib/auth/actions";
 import { Button } from "@/components/ui/button";
@@ -12,12 +13,29 @@ export default function ForgotPasswordPage() {
 
   return (
     <div className="container-page max-w-md py-12 md:py-16">
+      <div className="mb-7 flex items-center justify-center gap-3">
+        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white ring-1 ring-brand-line shadow-sm">
+          <Image
+            src="/images/logo.png"
+            alt="Prado&apos;s Tour"
+            width={48}
+            height={48}
+            className="h-9 w-9 object-contain"
+          />
+        </span>
+        <Link
+          href="/"
+          className="font-display text-xl font-bold tracking-tight text-brand-ink hover:text-brand-primary"
+        >
+          Prado&apos;s Tour
+        </Link>
+      </div>
       <div className="surface-card p-6 sm:p-8">
         <p className="eyebrow">Senha</p>
-        <h1 className="mt-2 font-display text-3xl font-bold tracking-tight text-[#2F2328]">
+        <h1 className="mt-2 font-display text-3xl font-bold tracking-tight text-brand-ink">
           Recuperar senha
         </h1>
-        <p className="mt-2 text-sm text-[#6B5B63]">
+        <p className="mt-2 text-sm text-brand-muted">
           Informe seu e-mail para receber as instruções.
         </p>
         <form
@@ -45,7 +63,7 @@ export default function ForgotPasswordPage() {
           </Button>
         </form>
         <p className="mt-6 text-sm">
-          <Link href="/login" className="font-semibold text-[#E84C91] hover:underline">
+          <Link href="/login" className="font-semibold text-brand-primary hover:underline">
             Voltar ao login
           </Link>
         </p>

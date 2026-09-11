@@ -1,10 +1,11 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import { createBookingAction } from "@/lib/booking/actions";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/form";
 import { calculateTripPrice, formatCurrency } from "@/lib/utils";
+import { SELLER_CODE_STORAGE_KEY } from "@/components/layout/seller-tracker";
 import type { BoardingPoint, Trip } from "@/types";
 
 type BoardingRow = {
@@ -51,6 +52,7 @@ export function CheckoutWizard({
   const [installments, setInstallments] = useState(1);
   const [couponCode, setCouponCode] = useState("");
   const [sellerCode, setSellerCode] = useState("");
+  const [sellerFromLink, setSellerFromLink] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [passengers, setPassengers] = useState<PassengerDraft[]>([
@@ -62,6 +64,18 @@ export function CheckoutWizard({
       seatGroup: "1",
     },
   ]);
+
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(SELLER_CODE_STORAGE_KEY);
+      if (saved) {
+        setSellerCode(saved.toUpperCase());
+        setSellerFromLink(true);
+      }
+    } catch {
+      // storage indisponível
+    }
+  }, []);
 
   const base = useMemo(
     () => calculateTripPrice(quantity, trip.pricePerson, trip.priceCouple),
@@ -400,11 +414,39 @@ export function CheckoutWizard({
             </div>
             <div>
               <Label>Código do vendedor (opcional)</Label>
+              {sellerFromLink && sellerCode && (
+                <p className="mb-1.5 rounded-lg bg-emerald-50 px-2 py-1 text-xs font-medium text-emerald-700">
+                  Você veio pelo link do vendedor {sellerCode}. Ele acompanhará
+                  esta compra.
+                </p>
+              )}
               <Input
                 value={sellerCode}
-                onChange={(e) => setSellerCode(e.target.value)}
+                onChange={(e) => {
+                  setSellerCode(e.target.value);
+                  if (sellerFromLink && e.target.value !== sellerCode) {
+                    setSellerFromLink(false);
+                  }
+                }}
                 placeholder="VD001"
               />
+              {sellerFromLink && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSellerCode("");
+                    setSellerFromLink(false);
+                    try {
+                      localStorage.removeItem(SELLER_CODE_STORAGE_KEY);
+                    } catch {
+                      // storage indisponível
+                    }
+                  }}
+                  className="mt-1 text-xs font-semibold text-[#C52D70] underline-offset-2 hover:underline"
+                >
+                  Remover indicação
+                </button>
+              )}
             </div>
             <div className="rounded-2xl border border-[#EBE4E7] bg-[#FAF7F8] p-4">
               <p className="text-sm text-[#6B5B63]">Subtotal: {formatCurrency(base)}</p>

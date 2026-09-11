@@ -13,10 +13,10 @@ export function RegisterForm() {
   return (
     <div className="surface-card p-6 sm:p-8">
       <p className="eyebrow">Cadastro</p>
-      <h1 className="mt-2 font-display text-3xl font-bold tracking-tight text-[#2F2328]">
+      <h1 className="mt-2 font-display text-3xl font-bold tracking-tight text-brand-ink">
         Criar conta
       </h1>
-      <p className="mt-2 text-sm text-[#6B5B63]">Preencha seus dados para reservar</p>
+      <p className="mt-2 text-sm text-brand-muted">Preencha seus dados para reservar</p>
 
       <form
         className="mt-8 grid gap-4 sm:grid-cols-2"
@@ -80,9 +80,9 @@ export function RegisterForm() {
         </div>
       </form>
 
-      <p className="mt-6 text-sm text-[#6B5B63]">
+      <p className="mt-6 text-sm text-brand-muted">
         Já tem conta?{" "}
-        <Link href="/login" className="font-semibold text-[#E84C91] hover:underline">
+        <Link href="/login" className="font-semibold text-brand-primary hover:underline">
           Entrar
         </Link>
       </p>

@@ -1,6 +1,13 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
+import { Outfit } from "next/font/google";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import "./globals.css";
+
+const outfit = Outfit({
+  subsets: ["latin"],
+  variable: "--font-display",
+  display: "swap",
+});
 
 export async function generateMetadata(): Promise<Metadata> {
   const store = await getRepositoryRuntime().read();
@@ -16,12 +23,16 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
+export const viewport: Viewport = {
+  themeColor: "#E84C91",
+};
+
 export default function RootLayout({
   children,
 }: Readonly<{ children: React.ReactNode }>) {
   return (
     <html lang="pt-BR">
-      <body className="antialiased">
+      <body className={`${outfit.variable} antialiased`}>
         {children}
       </body>
     </html>

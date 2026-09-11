@@ -7,10 +7,10 @@ export function Input({
   return (
     <input
       className={cn(
-        "w-full rounded-xl border border-[#EBE4E7] bg-white px-4 py-3 text-[#2F2328] shadow-sm outline-none transition",
-        "placeholder:text-[#9A8A92]",
+        "w-full rounded-xl border border-brand-line bg-white px-4 py-3 text-brand-ink shadow-sm outline-none transition",
+        "placeholder:text-brand-faint",
         "hover:border-[#D9CED3]",
-        "focus:border-[#E84C91] focus:ring-2 focus:ring-[#E84C91]/20",
+        "focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20",
         className,
       )}
       {...props}
@@ -24,7 +24,7 @@ export function Label({
 }: React.LabelHTMLAttributes<HTMLLabelElement>) {
   return (
     <label
-      className={cn("mb-1.5 block text-sm font-semibold text-[#3D2A33]", className)}
+      className={cn("mb-1.5 block text-sm font-semibold text-brand-ink", className)}
       {...props}
     />
   );
@@ -37,10 +37,10 @@ export function Textarea({
   return (
     <textarea
       className={cn(
-        "w-full rounded-xl border border-[#EBE4E7] bg-white px-4 py-3 text-[#2F2328] shadow-sm outline-none transition",
-        "placeholder:text-[#9A8A92]",
+        "w-full rounded-xl border border-brand-line bg-white px-4 py-3 text-brand-ink shadow-sm outline-none transition",
+        "placeholder:text-brand-faint",
         "hover:border-[#D9CED3]",
-        "focus:border-[#E84C91] focus:ring-2 focus:ring-[#E84C91]/20",
+        "focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20",
         className,
       )}
       {...props}
@@ -56,9 +56,9 @@ export function Select({
   return (
     <select
       className={cn(
-        "w-full rounded-xl border border-[#EBE4E7] bg-white px-4 py-3 text-[#2F2328] shadow-sm outline-none transition",
+        "w-full rounded-xl border border-brand-line bg-white px-4 py-3 text-brand-ink shadow-sm outline-none transition",
         "hover:border-[#D9CED3]",
-        "focus:border-[#E84C91] focus:ring-2 focus:ring-[#E84C91]/20",
+        "focus:border-brand-primary focus:ring-2 focus:ring-brand-primary/20",
         className,
       )}
       {...props}

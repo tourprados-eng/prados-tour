@@ -1,6 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
-import { ShieldCheck, Bus, Ticket, HeartHandshake, Star, MapPin } from "lucide-react";
+import { ShieldCheck, Bus, Ticket, HeartHandshake, Star, MapPin, Check } from "lucide-react";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -48,6 +48,8 @@ const testimonials = [
   },
 ];
 
+const trustItems = ["Pagamento seguro", "Voucher digital", "Vagas limitadas", "Check-in na viagem"];
+
 export default async function HomePage() {
   const store = await getRepositoryRuntime().read();
   const trips = store.trips.filter((t) => t.status === "PUBLICADA");
@@ -62,8 +64,8 @@ export default async function HomePage() {
 
   return (
     <div>
-      {/* Hero — brand first, light elegant composition */}
-      <section className="relative min-h-[min(92vh,880px)] overflow-hidden bg-[#2F2328]">
+      {/* Hero — brand gradient, beach vibes */}
+      <section className="relative min-h-[min(92vh,880px)] overflow-hidden bg-brand-deep">
         <Image
           src={brand.bannerUrl || "/images/guaruja.png"}
           alt="Excursões Prado's Tour"
@@ -72,41 +74,67 @@ export default async function HomePage() {
           sizes="100vw"
           className="object-cover object-center"
         />
-        <div className="absolute inset-0 bg-gradient-to-r from-white via-white/92 to-white/25 md:via-white/88 md:to-transparent" />
-        <div className="absolute inset-0 bg-gradient-to-t from-[#FAF7F8] via-transparent to-transparent md:hidden" />
+        <div className="absolute inset-0 bg-gradient-to-r from-brand-deep/95 via-brand-primary/85 to-brand-secondary/50" />
+        <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-brand-bg to-transparent" />
 
         <div className="container-page relative flex min-h-[min(92vh,880px)] flex-col justify-center py-16 md:py-20">
-          <div className="max-w-xl">
+          <div className="max-w-2xl text-white">
             <div className="hero-enter flex items-center gap-3">
-              <Image
-                src={brand.logoUrl}
-                alt={brand.companyName}
-                width={72}
-                height={72}
-                className="h-[4.5rem] w-[4.5rem] rounded-full object-cover shadow-lg shadow-[#E84C91]/15 ring-4 ring-white"
-                priority
-              />
-              <p className="font-display text-2xl font-bold tracking-tight text-[#E84C91] sm:text-3xl">
+              <span className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-white/15 ring-1 ring-white/40 backdrop-blur-sm">
+                <Image
+                  src={brand.logoUrl}
+                  alt={brand.companyName}
+                  width={72}
+                  height={72}
+                  className="h-12 w-12 object-contain drop-shadow"
+                  priority
+                />
+              </span>
+              <p className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
                 {brand.companyName}
               </p>
             </div>
 
-            <h1 className="hero-enter-delay mt-7 font-display text-[2.35rem] font-bold leading-[1.08] tracking-tight text-[#2F2328] sm:text-5xl md:text-[3.4rem]">
+            <h1 className="hero-enter-delay mt-7 font-display text-[2.35rem] font-bold leading-[1.08] tracking-tight sm:text-5xl md:text-[3.4rem]">
               Excursões com alegria, cuidado e segurança
             </h1>
 
-            <p className="hero-enter-late mt-5 max-w-md text-base leading-relaxed text-[#5C4B53] sm:text-lg">
+            <p className="hero-enter-late mt-5 max-w-md text-base leading-relaxed text-white/90 sm:text-lg">
               Reserve praias, parques e bate-voltas com pagamento fácil e voucher digital.
             </p>
 
+            <p className="hero-enter-late mt-6 flex max-w-md items-center gap-3 font-display text-lg italic tracking-tight text-[#FFD9E8] sm:text-xl">
+              <span
+                aria-hidden
+                className="h-8 w-1 shrink-0 rounded-full bg-gradient-to-b from-brand-primary to-brand-secondary"
+              />
+              Transformando quilômetros em histórias
+            </p>
+
             <div className="hero-enter-late mt-8 flex flex-wrap gap-3">
-              <Button href="/excursoes" size="lg">
+              <Button href="/excursoes" size="lg" variant="primary">
                 Ver excursões
               </Button>
-              <Button href="/criar-conta" size="lg" variant="outline">
+              <Button
+                href="/criar-conta"
+                size="lg"
+                className="border border-white/50 bg-white/10 text-white backdrop-blur-sm hover:bg-white/20 focus-visible:ring-white"
+              >
                 Criar conta
               </Button>
             </div>
+
+            <ul className="hero-enter-late mt-10 flex flex-wrap gap-2">
+              {trustItems.map((item) => (
+                <li
+                  key={item}
+                  className="flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold text-white/95 ring-1 ring-white/25 backdrop-blur-sm"
+                >
+                  <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} aria-hidden />
+                  {item}
+                </li>
+              ))}
+            </ul>
           </div>
         </div>
       </section>
@@ -136,7 +164,7 @@ export default async function HomePage() {
       </section>
 
       {/* Ofertas */}
-      <section className="border-y border-[#EBE4E7] bg-white section-pad">
+      <section className="border-y border-brand-line bg-white section-pad">
         <div className="container-page">
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
@@ -156,28 +184,28 @@ export default async function HomePage() {
               <Link
                 key={trip.id}
                 href={`/excursoes/${trip.slug}`}
-                className="surface-card group flex min-w-0 flex-col p-5 transition hover:border-[#E84C91]/30"
+                className="surface-card group flex min-w-0 flex-col p-5 transition hover:-translate-y-1 hover:border-brand-primary/35 hover:shadow-lift"
               >
                 <div className="flex items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <p className="text-xs font-bold uppercase tracking-wide text-[#F28C28]">
+                    <p className="text-xs font-bold uppercase tracking-wide text-brand-secondary">
                       Oferta dupla
                     </p>
-                    <h3 className="mt-1 truncate font-display text-xl font-bold text-[#2F2328]">
+                    <h3 className="mt-1 truncate font-display text-xl font-bold text-brand-ink">
                       {trip.name}
                     </h3>
-                    <p className="mt-1 text-sm text-[#6B5B63]">{formatDate(trip.date)}</p>
+                    <p className="mt-1 text-sm text-brand-muted">{formatDate(trip.date)}</p>
                   </div>
-                  <MapPin className="h-5 w-5 shrink-0 text-[#E84C91]" aria-hidden />
+                  <MapPin className="h-5 w-5 shrink-0 text-brand-primary" aria-hidden />
                 </div>
                 <div className="mt-5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                  <span className="text-sm text-[#8A7A82] line-through">
+                  <span className="text-sm text-brand-faint line-through">
                     {formatCurrency(trip.pricePerson * 2)}
                   </span>
-                  <span className="text-lg font-bold text-[#E84C91]">
+                  <span className="text-lg font-bold text-brand-primary">
                     {formatCurrency(trip.priceCouple!)}
                   </span>
-                  <span className="text-xs font-medium text-[#6B5B63]">para 2 pessoas</span>
+                  <span className="text-xs font-medium text-brand-muted">para 2 pessoas</span>
                 </div>
               </Link>
             ))}
@@ -198,12 +226,15 @@ export default async function HomePage() {
 
           <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
             {benefits.map((item) => (
-              <div key={item.title} className="surface-card p-6">
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-[#FFF0F6] text-[#E84C91]">
+              <div
+                key={item.title}
+                className="surface-card p-6 transition duration-300 hover:-translate-y-1 hover:shadow-lift"
+              >
+                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-tint text-brand-primary shadow-sm">
                   <item.icon className="h-5 w-5" aria-hidden />
                 </div>
-                <h3 className="mt-4 font-display text-lg font-bold text-[#2F2328]">{item.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-[#6B5B63]">{item.text}</p>
+                <h3 className="mt-4 font-display text-lg font-bold text-brand-ink">{item.title}</h3>
+                <p className="mt-2 text-sm leading-relaxed text-brand-muted">{item.text}</p>
               </div>
             ))}
           </div>
@@ -211,10 +242,10 @@ export default async function HomePage() {
       </section>
 
       {/* Depoimentos */}
-      <section className="bg-[#2F2328] section-pad text-white">
+      <section className="bg-brand-ink section-pad text-white">
         <div className="container-page">
           <div className="max-w-xl">
-            <p className="text-xs font-bold uppercase tracking-[0.12em] text-[#F28C28]">
+            <p className="text-xs font-bold uppercase tracking-[0.12em] text-brand-secondary">
               Avaliações
             </p>
             <h2 className="mt-2 font-display text-3xl font-bold tracking-tight md:text-4xl">
@@ -226,9 +257,9 @@ export default async function HomePage() {
             {testimonials.map((item) => (
               <figure
                 key={item.name}
-                className="rounded-2xl border border-white/10 bg-white/5 p-6 backdrop-blur-sm"
+                className="border-t-2 border-brand-primary bg-white/5 p-6 backdrop-blur-sm transition duration-300 hover:bg-white/10"
               >
-                <div className="flex gap-1 text-[#F28C28]" aria-label="5 estrelas">
+                <div className="flex gap-1 text-brand-secondary" aria-label="5 estrelas">
                   {Array.from({ length: 5 }).map((_, i) => (
                     <Star key={i} className="h-4 w-4 fill-current" />
                   ))}
@@ -261,7 +292,7 @@ export default async function HomePage() {
             {gallery.map((item, index) => (
               <div
                 key={`${item.src}-${index}`}
-                className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-[#F3EEF0] sm:aspect-[5/4] md:aspect-[4/5]"
+                className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-brand-tint shadow-card transition duration-300 hover:shadow-lift sm:aspect-[5/4] md:aspect-[4/5]"
               >
                 <Image
                   src={item.src}
@@ -270,7 +301,7 @@ export default async function HomePage() {
                   sizes="(max-width: 768px) 100vw, 33vw"
                   className="object-cover"
                 />
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/55 to-transparent p-4 pt-16">
+                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-4 pt-16">
                   <p className="text-sm font-semibold text-white">{item.label}</p>
                 </div>
               </div>
@@ -282,10 +313,8 @@ export default async function HomePage() {
       {/* CTA final */}
       <section className="pb-16 md:pb-20">
         <div className="container-page">
-          <div className="relative overflow-hidden rounded-[1.75rem] bg-gradient-to-br from-[#E84C91] to-[#F28C28] px-6 py-12 text-white sm:px-10 md:px-14 md:py-16">
-            <div className="pointer-events-none absolute -right-16 -top-16 h-56 w-56 rounded-full bg-white/10" />
-            <div className="pointer-events-none absolute -bottom-20 left-10 h-48 w-48 rounded-full bg-white/10" />
-            <div className="relative max-w-2xl">
+          <div className="brand-panel px-6 py-12 sm:px-10 md:px-14 md:py-16">
+            <div className="max-w-2xl">
               <h2 className="font-display text-3xl font-bold tracking-tight md:text-4xl">
                 Pronto para a próxima saída?
               </h2>
@@ -297,7 +326,7 @@ export default async function HomePage() {
                   href="/excursoes"
                   size="lg"
                   variant="white"
-                  className="!bg-white !text-[#E84C91] hover:!bg-[#FFF8FB]"
+                  className="!bg-white !text-brand-primary hover:!bg-[#FFF8FB]"
                 >
                   Reservar agora
                 </Button>
@@ -311,7 +340,7 @@ export default async function HomePage() {
               </div>
             </div>
           </div>
-          <p className="mt-6 text-center text-xs text-[#8A7A82]">{DEMO_PASSWORD_HINT}</p>
+          <p className="mt-6 text-center text-xs text-brand-faint">{DEMO_PASSWORD_HINT}</p>
         </div>
       </section>
     </div>

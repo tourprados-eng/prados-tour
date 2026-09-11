@@ -3,7 +3,7 @@
 import { v4 as uuid } from "uuid";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { getSession } from "@/lib/auth/session";
+import { getSession, canAccess } from "@/lib/auth/session";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import { calculateTripPrice, onlyDigits } from "@/lib/utils";
 import type { PaymentMethod, PaymentPlan } from "@/types";
@@ -287,6 +287,20 @@ export async function createBookingAction(input: CheckoutInput) {
           status: "PENDENTE",
           paidAt: null,
         });
+
+        for (const admin of store.profiles.filter((p) =>
+          ["SUPER_ADMIN", "ADMIN"].includes(p.role),
+        )) {
+          store.notifications.push({
+            id: uuid(),
+            userId: admin.id,
+            title: "Venda com indicação",
+            message: `Nova venda ${reference} vinculada ao vendedor ${seller.code}: comissão pendente a pagar.`,
+            type: "COMISSAO",
+            read: false,
+            createdAt: now,
+          });
+        }
       }
 
       store.notifications.push({
@@ -383,6 +397,64 @@ export async function simulateGatewayConfirm(paymentId: string) {
   const payment = store.payments.find((p) => p.id === paymentId);
   if (!payment?.gatewayPaymentId) return { error: "Pagamento não encontrado." };
   await confirmPaymentWebhook(payment.gatewayPaymentId);
+  return { ok: true };
+}
+
+export async function deleteBookingAction(bookingId: string) {
+  const session = await getSession();
+  if (!session || !canAccess(session.role, "admin")) {
+    return { error: "Sem permissão para excluir reservas." };
+  }
+
+  try {
+    await getRepositoryRuntime().transaction((store) => {
+      const booking = store.bookings.find((b) => b.id === bookingId);
+      if (!booking) throw new Error("Reserva não encontrada.");
+
+      const now = new Date().toISOString();
+
+      // Remove registros dependentes antes do pai, respeitando FKs do banco:
+      // passengers, payments, installments têm ON DELETE CASCADE; os demais
+      // (couponUsages, commissions, checkins, loyaltyPoints) não têm cascade e
+      // precisam ser removidos explicitamente para evitar constraint violation.
+      store.passengers = store.passengers.filter((p) => p.bookingId !== bookingId);
+      store.payments = store.payments.filter((p) => p.bookingId !== bookingId);
+      store.installments = store.installments.filter((p) => p.bookingId !== bookingId);
+      store.couponUsages = store.couponUsages.filter((p) => p.bookingId !== bookingId);
+      store.commissions = store.commissions.filter((p) => p.bookingId !== bookingId);
+      store.checkins = store.checkins.filter((p) => p.bookingId !== bookingId);
+      store.loyaltyPoints = store.loyaltyPoints.filter((p) => p.bookingId !== bookingId);
+
+      // Libera os assentos vinculados à reserva (ON DELETE SET NULL no banco).
+      for (const seat of store.seats) {
+        if (seat.bookingId === bookingId) {
+          seat.bookingId = null;
+          seat.state = "DISPONIVEL";
+        }
+      }
+
+      store.bookings = store.bookings.filter((b) => b.id !== bookingId);
+
+      // Registra a exclusão em audit log para rastreabilidade.
+      store.auditLogs.push({
+        id: uuid(),
+        userId: session.id,
+        action: "DELETE_BOOKING",
+        entity: "bookings",
+        entityId: bookingId,
+        oldValue: { reference: booking.reference, status: booking.status },
+        newValue: null,
+        ip: null,
+        createdAt: now,
+      });
+    });
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Erro ao excluir reserva." };
+  }
+
+  revalidatePath("/admin");
+  revalidatePath("/admin/reservas");
+  revalidatePath("/minhas-viagens");
   return { ok: true };
 }
 

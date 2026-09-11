@@ -10,10 +10,12 @@ export default async function TripsPage() {
   return (
     <div className="section-pad">
       <div className="container-page">
-        <div className="max-w-2xl">
-          <p className="eyebrow">Catálogo</p>
-          <h1 className="section-title mt-2">Excursões</h1>
-          <p className="section-lead">
+        <div className="brand-panel">
+          <p className="text-xs font-bold uppercase tracking-[0.12em] text-white/80">Catálogo</p>
+          <h1 className="mt-2 font-display text-3xl font-bold tracking-tight md:text-4xl">
+            Excursões
+          </h1>
+          <p className="mt-3 max-w-xl text-white/90">
             Escolha seu destino, veja embarques e reserve com pagamento seguro.
           </p>
         </div>
@@ -26,7 +28,7 @@ export default async function TripsPage() {
 
         {trips.length === 0 && (
           <div className="surface-card mt-10 p-8 text-center">
-            <p className="text-[#6B5B63]">Nenhuma viagem publicada no momento.</p>
+            <p className="text-brand-muted">Nenhuma viagem publicada no momento.</p>
             <Button href="/" variant="outline" className="mt-4">
               Voltar ao início
             </Button>

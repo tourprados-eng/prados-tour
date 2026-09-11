@@ -35,9 +35,9 @@ export default async function ContactPage() {
 
 function Row({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex flex-col gap-1 border-b border-[#EBE4E7] pb-4 sm:flex-row sm:items-center sm:justify-between">
-      <span className="text-sm font-medium text-[#8A7A82]">{label}</span>
-      <span className="break-all text-base font-semibold text-[#2F2328]">{value}</span>
+    <div className="flex flex-col gap-1 border-b border-brand-line pb-4 sm:flex-row sm:items-center sm:justify-between">
+      <span className="text-sm font-medium text-brand-faint">{label}</span>
+      <span className="break-all text-base font-semibold text-brand-ink">{value}</span>
     </div>
   );
 }

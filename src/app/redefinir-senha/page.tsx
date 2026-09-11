@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Image from "next/image";
 import Link from "next/link";
 import { createBrowserSupabase } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/button";
@@ -87,17 +88,34 @@ export default function ResetPasswordPage() {
 
   return (
     <div className="container-page max-w-md py-12 md:py-16">
+      <div className="mb-7 flex items-center justify-center gap-3">
+        <span className="grid h-12 w-12 shrink-0 place-items-center rounded-2xl bg-white ring-1 ring-brand-line shadow-sm">
+          <Image
+            src="/images/logo.png"
+            alt="Prado&apos;s Tour"
+            width={48}
+            height={48}
+            className="h-9 w-9 object-contain"
+          />
+        </span>
+        <Link
+          href="/"
+          className="font-display text-xl font-bold tracking-tight text-brand-ink hover:text-brand-primary"
+        >
+          Prado&apos;s Tour
+        </Link>
+      </div>
       <div className="surface-card p-6 sm:p-8">
         <p className="eyebrow">Senha</p>
-        <h1 className="mt-2 font-display text-3xl font-bold tracking-tight text-[#2F2328]">
+        <h1 className="mt-2 font-display text-3xl font-bold tracking-tight text-brand-ink">
           Definir nova senha
         </h1>
-        <p className="mt-2 text-sm text-[#6B5B63]">
+        <p className="mt-2 text-sm text-brand-muted">
           Informe a nova senha para acessar sua conta.
         </p>
 
         {status.kind === "checking" && (
-          <p className="mt-8 text-sm text-[#6B5B63]">Verificando link de recuperação…</p>
+          <p className="mt-8 text-sm text-brand-muted">Verificando link de recuperação…</p>
         )}
 
         {status.kind === "error" && (
@@ -105,9 +123,9 @@ export default function ResetPasswordPage() {
             <p className="rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
               {status.message}
             </p>
-            <p className="mt-4 text-sm text-[#6B5B63]">
+            <p className="mt-4 text-sm text-brand-muted">
               Solicite novamente em{" "}
-              <Link href="/recuperar-senha" className="font-semibold text-[#E84C91] hover:underline">
+              <Link href="/recuperar-senha" className="font-semibold text-brand-primary hover:underline">
                 Recuperar senha
               </Link>
               .
@@ -143,7 +161,7 @@ export default function ResetPasswordPage() {
         )}
 
         <p className="mt-6 text-sm">
-          <Link href="/login" className="font-semibold text-[#E84C91] hover:underline">
+          <Link href="/login" className="font-semibold text-brand-primary hover:underline">
             Voltar ao login
           </Link>
         </p>

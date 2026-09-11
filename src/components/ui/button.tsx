@@ -9,17 +9,17 @@ type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
 
 const variants: Record<NonNullable<ButtonProps["variant"]>, string> = {
   primary:
-    "bg-[#E84C91] text-white shadow-sm shadow-[#E84C91]/25 hover:bg-[#d63d7f] hover:shadow-md focus-visible:ring-[#E84C91]",
+    "bg-brand-grad text-white shadow-glow hover:brightness-[1.06] hover:shadow-[0_14px_34px_-10px_rgb(232_76_145_/_0.55)] focus-visible:ring-brand-primary",
   secondary:
-    "bg-[#F28C28] text-white shadow-sm shadow-[#F28C28]/25 hover:bg-[#e07b18] hover:shadow-md focus-visible:ring-[#F28C28]",
+    "bg-brand-secondary text-white shadow-[0_10px_24px_-10px_rgb(242_140_40_/_0.6)] hover:bg-[#e07b18] focus-visible:ring-brand-secondary",
   outline:
-    "border border-[#E84C91]/40 bg-white text-[#E84C91] hover:border-[#E84C91] hover:bg-[#FFF0F6] focus-visible:ring-[#E84C91]",
+    "border border-brand-primary/40 bg-white text-brand-primary hover:border-brand-primary hover:bg-brand-tint focus-visible:ring-brand-primary",
   ghost:
-    "border border-transparent bg-transparent text-[#3D2A33] hover:bg-[#F5F0F2] focus-visible:ring-[#E84C91]",
+    "border border-transparent bg-transparent text-brand-ink hover:bg-[#F5F0F2] focus-visible:ring-brand-primary",
   soft:
-    "border border-transparent bg-[#FFF0F6] text-[#E84C91] hover:bg-[#FFE3EF] focus-visible:ring-[#E84C91]",
+    "border border-transparent bg-brand-tint text-brand-primary hover:bg-[#FFE3EF] focus-visible:ring-brand-primary",
   white:
-    "border border-white/40 bg-white text-[#E84C91] shadow-md shadow-black/10 hover:bg-[#FFF8FB] focus-visible:ring-white",
+    "border border-white/40 bg-white text-brand-primary shadow-md shadow-black/10 hover:bg-[#FFF8FB] focus-visible:ring-white",
 };
 
 const sizes = {

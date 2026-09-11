@@ -2,6 +2,7 @@ import Link from "next/link";
 import { getSession, canAccess } from "@/lib/auth/session";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import { formatCurrency } from "@/lib/utils";
+import DeleteBookingButton from "@/components/admin/delete-booking-button";
 
 type SearchParams = Promise<{
   q?: string;
@@ -299,7 +300,7 @@ export default async function AdminReservasPage({
                   <th className="px-6 py-4">Valor</th>
                   <th className="px-6 py-4">Pagamento</th>
                   <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4"></th>
+                  <th className="px-6 py-4">Ações</th>
                 </tr>
               </thead>
 
@@ -392,12 +393,23 @@ export default async function AdminReservasPage({
                       </td>
 
                       <td className="px-6 py-5 text-right">
-                        <Link
-                          href={`/admin/reservas/${booking.id}`}
-                          className="inline-flex rounded-xl border border-black/10 px-4 py-2 text-sm font-semibold transition hover:bg-black/[0.04]"
-                        >
-                          Ver detalhes
-                        </Link>
+                        <div className="flex items-center justify-end gap-2">
+                          <Link
+                            href={`/admin/reservas/${booking.id}`}
+                            className="inline-flex rounded-xl border border-black/10 px-4 py-2 text-sm font-semibold transition hover:bg-black/[0.04]"
+                          >
+                            Ver detalhes
+                          </Link>
+
+                          <DeleteBookingButton
+                            bookingId={booking.id}
+                            reference={booking.reference}
+                            customerName={
+                              customer?.fullName || "Cliente não encontrado"
+                            }
+                            hasPaidPayment={payment?.status === "PAGO"}
+                          />
+                        </div>
                       </td>
                     </tr>
                   ),

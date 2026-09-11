@@ -23,7 +23,7 @@ export default async function TripDetailPage({
     <div className="section-pad pt-8 md:pt-12">
       <div className="container-page">
         <div className="grid gap-8 lg:grid-cols-2 lg:gap-12">
-          <div className="relative aspect-[4/3] overflow-hidden rounded-[1.5rem] bg-[#F3EEF0] shadow-sm">
+          <div className="relative aspect-[4/3] overflow-hidden rounded-[1.5rem] bg-brand-tint shadow-card">
             <Image
               src={trip.images[0] || "/images/guaruja.png"}
               alt={trip.name}
@@ -36,25 +36,25 @@ export default async function TripDetailPage({
 
           <div className="min-w-0">
             <p className="eyebrow">{trip.category}</p>
-            <h1 className="mt-2 font-display text-4xl font-bold tracking-tight text-[#2F2328] md:text-5xl">
+            <h1 className="mt-2 font-display text-4xl font-bold tracking-tight text-brand-ink md:text-5xl">
               {trip.name}
             </h1>
-            <p className="mt-3 text-base text-[#6B5B63] md:text-lg">
+            <p className="mt-3 text-base text-brand-muted md:text-lg">
               {formatDate(trip.date)} · saída {trip.departureTime} · retorno {trip.returnTime}
             </p>
-            <p className="mt-2 text-sm text-[#6B5B63]">{trip.destination}</p>
+            <p className="mt-2 text-sm text-brand-muted">{trip.destination}</p>
 
-            <div className="mt-6 rounded-2xl border border-[#EBE4E7] bg-white p-5">
-              <p className="text-sm text-[#6B5B63]">Valor por pessoa</p>
-              <p className="mt-1 text-3xl font-bold text-[#E84C91]">
+            <div className="mt-6 rounded-2xl border border-brand-line bg-white p-5 shadow-card">
+              <p className="text-sm text-brand-muted">Valor por pessoa</p>
+              <p className="mt-1 text-3xl font-bold text-brand-primary">
                 {formatCurrency(trip.pricePerson)}
               </p>
               {trip.priceCouple && (
-                <p className="mt-1 text-sm text-[#6B5B63]">
+                <p className="mt-1 text-sm text-brand-muted">
                   Dupla: {formatCurrency(trip.priceCouple)}
                 </p>
               )}
-              <p className="mt-3 text-sm font-medium text-[#2F2328]">
+              <p className="mt-3 text-sm font-medium text-brand-ink">
                 {availableSeats} vagas disponíveis de {trip.totalSeats}
               </p>
               <div className="mt-5 flex flex-wrap gap-3">
@@ -79,20 +79,20 @@ export default async function TripDetailPage({
         </div>
 
         <div className="surface-card mt-10 p-6 md:p-8">
-          <h2 className="font-display text-2xl font-bold text-[#2F2328]">
+          <h2 className="font-display text-2xl font-bold text-brand-ink">
             Pontos de embarque
           </h2>
-          <ul className="mt-5 divide-y divide-[#EBE4E7]">
+          <ul className="mt-5 divide-y divide-brand-line">
             {boarding.map((b) => (
               <li
                 key={b.id}
                 className="flex flex-col gap-1 py-4 sm:flex-row sm:items-center sm:justify-between"
               >
                 <div className="min-w-0">
-                  <p className="font-semibold text-[#2F2328]">{b.point.name}</p>
-                  <p className="text-sm text-[#6B5B63]">{b.point.address}</p>
+                  <p className="font-semibold text-brand-ink">{b.point.name}</p>
+                  <p className="text-sm text-brand-muted">{b.point.address}</p>
                 </div>
-                <p className="shrink-0 text-base font-bold text-[#E84C91]">{b.time}</p>
+                <p className="shrink-0 text-base font-bold text-brand-primary">{b.time}</p>
               </li>
             ))}
           </ul>
@@ -105,8 +105,8 @@ export default async function TripDetailPage({
 function Section({ title, body }: { title: string; body: string }) {
   return (
     <div className="surface-card p-6">
-      <h2 className="text-lg font-bold text-[#2F2328]">{title}</h2>
-      <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-[#6B5B63]">{body}</p>
+      <h2 className="text-lg font-bold text-brand-ink">{title}</h2>
+      <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-brand-muted">{body}</p>
     </div>
   );
 }

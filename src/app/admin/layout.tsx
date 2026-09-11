@@ -16,6 +16,12 @@ const links = [
   { href: "/admin/configuracoes", label: "Configurações" },
 ];
 
+function resolveGreetingName(fullName: string): string {
+  const first = fullName?.trim().split(/\s+/)[0] ?? "";
+  if (!first || first.toLowerCase() === "cliente") return "Administrador";
+  return first;
+}
+
 export default async function AdminLayout({
   children,
 }: {
@@ -26,6 +32,8 @@ export default async function AdminLayout({
   if (!session || !canAccess(session.role, "admin")) {
     redirect("/login");
   }
+
+  const greetingName = resolveGreetingName(session.fullName);
 
   return (
     <div className="min-h-screen bg-[#F7F4F5]">
@@ -86,7 +94,7 @@ export default async function AdminLayout({
                 Administração
               </p>
               <p className="mt-1 text-sm font-semibold text-[#2F2328]">
-                Olá, {session.fullName.split(" ")[0]}
+                Olá, {greetingName}
               </p>
             </div>
 
