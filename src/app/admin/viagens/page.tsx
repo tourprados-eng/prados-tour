@@ -1,6 +1,7 @@
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import TripForm from "@/components/admin/trip-form";
 import DeleteTripButton from "@/components/admin/delete-trip-button";
+import EditTripButton from "@/components/admin/edit-trip-button";
 import { formatCurrency } from "@/lib/utils";
 
 const tripStatusLabels: Record<string, string> = {
@@ -144,7 +145,10 @@ export default async function AdminTripsPage() {
                       </td>
 
                       <td className="px-6 py-5 text-right">
-                        <DeleteTripButton tripId={trip.id} tripName={trip.name} />
+                        <div className="flex items-center justify-end gap-2">
+                          <EditTripButton tripId={trip.id} />
+                          <DeleteTripButton tripId={trip.id} tripName={trip.name} />
+                        </div>
                       </td>
                     </tr>
                   );

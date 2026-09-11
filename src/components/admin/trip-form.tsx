@@ -4,6 +4,7 @@
 import { useMemo, useRef, useState } from "react";
 import { ImagePlus, MapPin, UploadCloud, Trash2, Lightbulb, Save, ArrowLeft, Star } from "lucide-react";
 import { upsertTrip } from "@/lib/admin/actions";
+import type { Trip, TripBoardingPoint } from "@/types";
 
 type BoardingPoint = {
   id: string;
@@ -20,15 +21,28 @@ type SelectedImage = {
 
 export default function TripForm({
   boardingPoints,
+  trip,
+  tripBoardingPoints,
 }: {
   boardingPoints: BoardingPoint[];
+  trip?: Trip;
+  tripBoardingPoints?: TripBoardingPoint[];
 }) {
+  const existingUrls = trip?.images ?? [];
+  const initialPoints: Record<string, boolean> = {};
+  const initialTimes: Record<string, string> = {};
+  for (const link of tripBoardingPoints ?? []) {
+    initialPoints[link.boardingPointId] = true;
+    initialTimes[link.boardingPointId] = link.time;
+  }
+
   const [images, setImages] = useState<SelectedImage[]>([]);
-  const [selectedPoints, setSelectedPoints] = useState<Record<string, boolean>>({});
-  const [times, setTimes] = useState<Record<string, string>>({});
+  const [savedUrls, setSavedUrls] = useState<string[]>(existingUrls);
+  const [selectedPoints, setSelectedPoints] = useState<Record<string, boolean>>(initialPoints);
+  const [times, setTimes] = useState<Record<string, string>>(initialTimes);
   const [featured, setFeatured] = useState(true);
-  const [formUrl, setFormUrl] = useState("");
-  const [formRequired, setFormRequired] = useState(true);
+  const [formUrl, setFormUrl] = useState(trip?.formUrl ?? "");
+  const [formRequired, setFormRequired] = useState(trip?.formRequired ?? true);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const selectedCount = useMemo(
@@ -91,7 +105,8 @@ export default function TripForm({
 
     /*
      * As imagens serão enviadas para a API de upload antes de salvar
-     * a viagem.
+     * a viagem. Imagens já salvas são mantidas; à medida que novas são
+     * enviadas, são anexadas à lista.
      */
     const uploadedUrls: string[] = [];
 
@@ -116,9 +131,11 @@ export default function TripForm({
       }
     }
 
-    formData.set("imageUrls", JSON.stringify(uploadedUrls));
+    const imageUrls = [...savedUrls, ...uploadedUrls];
+    formData.set("imageUrls", JSON.stringify(imageUrls));
 
     const result = await upsertTrip({
+      id: trip?.id,
       name: String(formData.get("name")),
       destination: String(formData.get("destination")),
       category: String(formData.get("category")),
@@ -135,8 +152,8 @@ export default function TripForm({
       rules: String(formData.get("rules")),
       cancellationPolicy: String(formData.get("cancellationPolicy")),
       status: String(formData.get("status")) as "PUBLICADA" | "RASCUNHO",
-      imageUrl: uploadedUrls[0] || undefined,
-      imageUrls: uploadedUrls,
+      imageUrl: imageUrls[0] || undefined,
+      imageUrls,
       formUrl: formUrl.trim() || undefined,
       formRequired,
       boardingPoints: selectedBoardingPoints,
@@ -163,10 +180,12 @@ export default function TripForm({
 
           <div>
             <h1 className="text-3xl font-bold tracking-tight text-[#21171b]">
-              Nova Viagem
+              {trip ? "Editar Viagem" : "Nova Viagem"}
             </h1>
             <p className="mt-1 text-sm text-[#77666e]">
-              Preencha as informações da viagem
+              {trip
+                ? "Atualize as informações desta viagem"
+                : "Preencha as informações da viagem"}
             </p>
           </div>
         </div>
@@ -193,6 +212,7 @@ export default function TripForm({
                 <input
                   name="name"
                   required
+                  defaultValue={trip?.name ?? ""}
                   placeholder="Ex.: Guarujá - Praia da Enseada"
                   className="h-12 w-full rounded-xl border border-[#ddd2d8] bg-white px-4 text-sm outline-none transition focus:border-[#ec3f88] focus:ring-4 focus:ring-[#ec3f88]/10"
                 />
@@ -205,7 +225,7 @@ export default function TripForm({
                 <select
                   name="category"
                   required
-                  defaultValue="Praia"
+                  defaultValue={trip?.category ?? "Praia"}
                   className="h-12 w-full rounded-xl border border-[#ddd2d8] bg-white px-4 text-sm outline-none focus:border-[#ec3f88]"
                 >
                   <option>Praia</option>
@@ -226,6 +246,7 @@ export default function TripForm({
                 <input
                   name="destination"
                   required
+                  defaultValue={trip?.destination ?? ""}
                   placeholder="Ex.: Guarujá - SP"
                   className="h-12 w-full rounded-xl border border-[#ddd2d8] px-4 text-sm outline-none focus:border-[#ec3f88]"
                 />
@@ -239,6 +260,7 @@ export default function TripForm({
                   name="date"
                   type="date"
                   required
+                  defaultValue={trip?.date ?? ""}
                   className="h-12 w-full rounded-xl border border-[#ddd2d8] px-4 text-sm outline-none focus:border-[#ec3f88]"
                 />
               </div>
@@ -251,6 +273,7 @@ export default function TripForm({
                   name="departureTime"
                   type="time"
                   required
+                  defaultValue={trip?.departureTime ?? ""}
                   className="h-12 w-full rounded-xl border border-[#ddd2d8] px-4 text-sm outline-none focus:border-[#ec3f88]"
                 />
               </div>
@@ -263,6 +286,7 @@ export default function TripForm({
                   name="returnTime"
                   type="time"
                   required
+                  defaultValue={trip?.returnTime ?? ""}
                   className="h-12 w-full rounded-xl border border-[#ddd2d8] px-4 text-sm outline-none focus:border-[#ec3f88]"
                 />
               </div>
@@ -277,6 +301,7 @@ export default function TripForm({
                   step="0.01"
                   min="0"
                   required
+                  defaultValue={trip?.pricePerson ?? ""}
                   placeholder="175,00"
                   className="h-12 w-full rounded-xl border border-[#ddd2d8] px-4 text-sm outline-none focus:border-[#ec3f88]"
                 />
@@ -291,6 +316,7 @@ export default function TripForm({
                   type="number"
                   step="0.01"
                   min="0"
+                  defaultValue={trip?.priceCouple ?? ""}
                   placeholder="320,00"
                   className="h-12 w-full rounded-xl border border-[#ddd2d8] px-4 text-sm outline-none focus:border-[#ec3f88]"
                 />
@@ -304,7 +330,7 @@ export default function TripForm({
                   name="totalSeats"
                   type="number"
                   min="1"
-                  defaultValue={46}
+                  defaultValue={trip?.totalSeats ?? 46}
                   required
                   className="h-12 w-full rounded-xl border border-[#ddd2d8] px-4 text-sm outline-none focus:border-[#ec3f88]"
                 />
@@ -316,7 +342,7 @@ export default function TripForm({
                 </label>
                 <select
                   name="status"
-                  defaultValue="PUBLICADA"
+                  defaultValue={trip?.status ?? "PUBLICADA"}
                   className="h-12 w-full rounded-xl border border-[#ddd2d8] px-4 text-sm outline-none focus:border-[#ec3f88]"
                 >
                   <option value="PUBLICADA">Publicada</option>
@@ -488,6 +514,7 @@ export default function TripForm({
               name="description"
               required
               rows={5}
+              defaultValue={trip?.description ?? ""}
               placeholder="Descreva a viagem, atrações, o que será feito, etc."
               className="w-full resize-y rounded-2xl border border-[#ddd2d8] p-4 text-sm leading-6 outline-none focus:border-[#ec3f88] focus:ring-4 focus:ring-[#ec3f88]/10"
             />
@@ -501,6 +528,7 @@ export default function TripForm({
                   name="itinerary"
                   required
                   rows={5}
+                  defaultValue={trip?.itinerary ?? ""}
                   placeholder="Informe o roteiro..."
                   className="w-full rounded-2xl border border-[#ddd2d8] p-4 text-sm outline-none focus:border-[#ec3f88]"
                 />
@@ -514,6 +542,7 @@ export default function TripForm({
                   name="included"
                   required
                   rows={5}
+                  defaultValue={trip?.included ?? ""}
                   placeholder="Transporte, ingresso, guia..."
                   className="w-full rounded-2xl border border-[#ddd2d8] p-4 text-sm outline-none focus:border-[#ec3f88]"
                 />
@@ -527,6 +556,7 @@ export default function TripForm({
                   name="notIncluded"
                   required
                   rows={4}
+                  defaultValue={trip?.notIncluded ?? ""}
                   placeholder="Alimentação, despesas pessoais..."
                   className="w-full rounded-2xl border border-[#ddd2d8] p-4 text-sm outline-none focus:border-[#ec3f88]"
                 />
@@ -540,6 +570,7 @@ export default function TripForm({
                   name="rules"
                   required
                   rows={4}
+                  defaultValue={trip?.rules ?? ""}
                   placeholder="Regras da viagem..."
                   className="w-full rounded-2xl border border-[#ddd2d8] p-4 text-sm outline-none focus:border-[#ec3f88]"
                 />
@@ -553,6 +584,7 @@ export default function TripForm({
                   name="cancellationPolicy"
                   required
                   rows={4}
+                  defaultValue={trip?.cancellationPolicy ?? ""}
                   placeholder="Política de cancelamento..."
                   className="w-full rounded-2xl border border-[#ddd2d8] p-4 text-sm outline-none focus:border-[#ec3f88]"
                 />
@@ -612,8 +644,36 @@ export default function TripForm({
               className="hidden"
             />
 
-            {images.length > 0 && (
+            {(savedUrls.length > 0 || images.length > 0) && (
               <div className="mt-4 grid grid-cols-2 gap-3">
+                {savedUrls.map((url) => (
+                  <div
+                    key={url}
+                    className="group relative overflow-hidden rounded-xl border border-[#eadfe4]"
+                  >
+                    {/* eslint-disable-next-line @next/next/no-img-element -- preview de imagens salvas (URLs remotas/fixas) */}
+                    <img
+                      src={url}
+                      alt=""
+                      className="h-32 w-full object-cover"
+                    />
+
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setSavedUrls((current) => current.filter((u) => u !== url))
+                      }
+                      className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-lg bg-black/70 text-white opacity-0 transition group-hover:opacity-100"
+                    >
+                      <Trash2 size={16} />
+                    </button>
+
+                    <div className="absolute bottom-0 left-0 right-0 bg-black/45 px-2 py-1 text-[10px] text-white">
+                      Salva
+                    </div>
+                  </div>
+                ))}
+
                 {images.map((image) => (
                   <div
                     key={image.id}
@@ -702,7 +762,7 @@ export default function TripForm({
               className="flex h-13 flex-[1.4] items-center justify-center gap-2 rounded-xl bg-[#ec3f88] font-bold text-white shadow-lg shadow-[#ec3f88]/20 transition hover:bg-[#d92f75]"
             >
               <Save size={19} />
-              Salvar Viagem
+              {trip ? "Salvar Alterações" : "Salvar Viagem"}
             </button>
           </div>
         </aside>

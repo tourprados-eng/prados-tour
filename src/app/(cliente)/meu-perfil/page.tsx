@@ -2,6 +2,7 @@ import { redirect } from "next/navigation";
 import { requireUser } from "@/lib/auth/actions";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import { maskCpf } from "@/lib/utils";
+import { roleLabel } from "@/lib/roles";
 import { Button } from "@/components/ui/button";
 
 export default async function ProfilePage() {
@@ -19,7 +20,7 @@ export default async function ProfilePage() {
         <Row label="CPF" value={maskCpf(profile.cpf)} />
         <Row label="Telefone" value={profile.phone || "—"} />
         <Row label="WhatsApp" value={profile.whatsapp || "—"} />
-        <Row label="Perfil" value={profile.role} />
+        <Row label="Perfil" value={roleLabel(profile.role)} />
         <Row label="Classificação" value={profile.customerClass} />
         <Row label="Código de indicação" value={profile.referralCode} />
       </div>

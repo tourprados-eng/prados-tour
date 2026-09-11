@@ -10,7 +10,7 @@ import { revalidatePath } from "next/cache";
 import { getSession, canAccess } from "@/lib/auth/session";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import { getAuthDriver, assertSupabaseServerConfiguration } from "@/lib/supabase/config";
-import type { BrandSettings, Trip, TripStatus } from "@/types";
+import type { BrandSettings, DataStore, Trip, TripStatus } from "@/types";
 import { slugify, formatCurrency } from "@/lib/utils";
 
 function nextSellerCode(existing: string[], prefix = "VD"): string {
@@ -379,6 +379,52 @@ export async function updateBrandSettings(partial: Partial<BrandSettings>) {
   return { ok: true };
 }
 
+/**
+ * Mantém a coleção de assentos coerente com `totalSeats` ao editar a viagem:
+ * cria assentos novos se aumentou e remove apenas assentos disponíveis se
+ * diminuiu. Assentos ocupados nunca são removidos.
+ */
+function reconcileTripSeats(
+  store: DataStore,
+  tripId: string,
+  totalSeats: number,
+) {
+  const current = store.seats.filter((s) => s.tripId === tripId);
+  const nextNumber = totalSeats;
+
+  const occupied = current.filter(
+    (s) => s.state === "OCUPADO" || s.bookingId !== null,
+  );
+
+  if (occupied.length > nextNumber) {
+    throw new Error(
+      `Não é possível reduzir as vagas para ${nextNumber}: ${occupied.length} assento(s) já estão ocupados.`,
+    );
+  }
+
+  if (current.length < nextNumber) {
+    for (let i = current.length + 1; i <= nextNumber; i++) {
+      store.seats.push({
+        id: uuid(),
+        tripId,
+        seatNumber: String(i).padStart(2, "0"),
+        state: "DISPONIVEL",
+        bookingId: null,
+      });
+    }
+  } else if (current.length > nextNumber) {
+    const toRemove = current.length - nextNumber;
+    let removed = 0;
+    for (const seat of current) {
+      if (removed >= toRemove) break;
+      if (seat.state === "DISPONIVEL" && seat.bookingId === null) {
+        store.seats = store.seats.filter((s) => s.id !== seat.id);
+        removed++;
+      }
+    }
+  }
+}
+
 export async function upsertTrip(data: {
   id?: string;
   name: string;
@@ -427,13 +473,29 @@ export async function upsertTrip(data: {
       );
     }
 
+    // Na edição, pontos já vinculados à viagem (mesmo que desativados após o
+    // vínculo) continuam válidos; novos vínculos exigem ponto ativo.
+    const existingTripIds = data.id
+      ? new Set(
+          store.tripBoardingPoints
+            .filter((link) => link.tripId === data.id)
+            .map((link) => link.boardingPointId),
+        )
+      : new Set<string>();
+
     for (const item of selectedBoarding) {
-      const point = store.boardingPoints.find(
-        (b) => b.id === item.boardingPointId && b.active,
-      );
+      const point = store.boardingPoints.find((b) => b.id === item.boardingPointId);
+
+      const isAllowed =
+        point &&
+        (point.active || existingTripIds.has(item.boardingPointId));
+
+      if (!isAllowed) {
+        throw new Error("Ponto de embarque inválido.");
+      }
 
       if (!point) {
-        throw new Error("Ponto de embarque inválido.");
+        throw new Error(`Horário inválido para o ponto selecionado.`);
       }
 
       if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(item.time)) {
@@ -464,13 +526,16 @@ export async function upsertTrip(data: {
         status: data.status,
         formUrl: data.formUrl?.trim() || undefined,
         formRequired: data.formUrl ? data.formRequired !== false : false,
+        images:
+          data.imageUrls !== undefined
+            ? data.imageUrls
+            : data.imageUrl
+              ? [data.imageUrl]
+              : trip.images,
         updatedAt: now,
       });
-      if (data.imageUrls && data.imageUrls.length > 0) {
-        trip.images = data.imageUrls;
-      } else if (data.imageUrl) {
-        trip.images = [data.imageUrl];
-      }
+
+      reconcileTripSeats(store, trip.id, data.totalSeats);
 
       store.tripBoardingPoints = store.tripBoardingPoints.filter(
         (item) => item.tripId !== trip.id,
@@ -548,6 +613,7 @@ export async function upsertTrip(data: {
   revalidatePath("/admin/viagens");
   revalidatePath("/excursoes");
   revalidatePath("/excursoes/[slug]", "page");
+  revalidatePath("/");
   return { ok: true };
 }
 

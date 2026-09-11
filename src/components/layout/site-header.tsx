@@ -64,7 +64,7 @@ export async function SiteHeader() {
 
           <div className="flex shrink-0 items-center gap-2">
             {session ? (
-              <UserMenu fullName={session.fullName} email={session.email} />
+              <UserMenu fullName={session.fullName} email={session.email} role={session.role} />
             ) : (
               <>
                 <Button href="/login" variant="ghost" size="sm">

@@ -71,22 +71,6 @@ export async function getSession(): Promise<SessionUser | null> {
   return verifySessionToken(token);
 }
 
-export function homeForRole(role: AppRole) {
-  switch (role) {
-    case "SUPER_ADMIN":
-    case "ADMIN":
-      return "/admin";
-    case "FINANCEIRO":
-      return "/financeiro";
-    case "VENDEDOR":
-      return "/vendedor";
-    case "MONITOR":
-      return "/operacional";
-    default:
-      return "/minhas-viagens";
-  }
-}
-
 export function canAccess(role: AppRole, area: "admin" | "financeiro" | "vendedor" | "operacional" | "customer") {
   const map: Record<typeof area, AppRole[]> = {
     admin: ["SUPER_ADMIN", "ADMIN"],

@@ -29,3 +29,13 @@ export function getPaymentWebhookSecret() {
   }
   return value || null;
 }
+
+/**
+ * E-mail da conta designada como Super Admin do sistema. Não é um segredo
+ * (é um identificador público da conta); serve apenas para identificar a
+ * conta prevista pelo sistema em validações/cross-check. Ausente se não
+ * configurado.
+ */
+export function getSuperAdminEmail(): string | null {
+  return process.env.SUPER_ADMIN_EMAIL?.trim().toLowerCase() || null;
+}

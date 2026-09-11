@@ -5,7 +5,8 @@ import { redirect } from "next/navigation";
 import { z } from "zod";
 import { v4 as uuid } from "uuid";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
-import { clearSession, getSession, homeForRole, setSession } from "@/lib/auth/session";
+import { clearSession, getSession, setSession } from "@/lib/auth/session";
+import { homeForRole } from "@/lib/roles";
 import { getAuthDriver } from "@/lib/supabase/config";
 import { clearSupabaseSession } from "@/lib/auth/supabase-session";
 import {

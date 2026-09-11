@@ -1,9 +1,9 @@
-import Image from "next/image";
 import { notFound } from "next/navigation";
 import { getTripBySlug } from "@/lib/booking/actions";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { getSession } from "@/lib/auth/session";
+import { TripCover } from "@/components/trips/trip-cover";
 
 export default async function TripDetailPage({
   params,
@@ -24,12 +24,11 @@ export default async function TripDetailPage({
       <div className="container-page">
         <div className="grid gap-8 lg:grid-cols-2 lg:gap-12">
           <div className="relative aspect-[4/3] overflow-hidden rounded-[1.5rem] bg-brand-tint shadow-card">
-            <Image
-              src={trip.images[0] || "/images/guaruja.png"}
+            <TripCover
+              images={trip.images}
               alt={trip.name}
-              fill
-              priority
               sizes="(max-width: 1024px) 100vw, 50vw"
+              priority
               className="object-cover"
             />
           </div>

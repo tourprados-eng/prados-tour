@@ -1,8 +1,8 @@
-import Image from "next/image";
 import Link from "next/link";
 import { MapPin, ArrowRight } from "lucide-react";
 import type { Trip } from "@/types";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { TripCover } from "@/components/trips/trip-cover";
 
 export function TripCard({ trip }: { trip: Trip }) {
   return (
@@ -11,10 +11,9 @@ export function TripCard({ trip }: { trip: Trip }) {
       className="group surface-card flex h-full min-w-0 flex-col overflow-hidden transition duration-300 hover:-translate-y-1.5 hover:shadow-lift"
     >
       <div className="relative aspect-[4/3] overflow-hidden bg-brand-tint">
-        <Image
-          src={trip.images[0] || "/images/guaruja.png"}
+        <TripCover
+          images={trip.images}
           alt={trip.name}
-          fill
           sizes="(max-width: 768px) 100vw, 33vw"
           className="object-cover transition duration-500 group-hover:scale-[1.05]"
         />

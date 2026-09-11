@@ -3,6 +3,7 @@ import "server-only";
 import { createServerClient } from "@supabase/ssr";
 import { cookies } from "next/headers";
 import { getSupabaseEnvironment } from "@/lib/supabase/config";
+import { getSuperAdminEmail } from "@/lib/env/server";
 import type { AppRole, SessionUser } from "@/types";
 
 /**
@@ -67,6 +68,17 @@ export async function getSupabaseSessionUser(): Promise<SessionUser | null> {
     .maybeSingle();
 
   if (profileError || !profile) return null;
+
+  // Cross-check de identidade: o papel efetivo vem SEMPRE de profiles.role no
+  // banco. A conta designada via SUPER_ADMIN_EMAIL (server-only) é apenas
+  // identificada para validação — nunca concedemos privilégio por e-mail.
+  const designatedSuperAdmin = getSuperAdminEmail();
+  const profileEmail = (user.email ?? profile.email ?? "").toLowerCase();
+  if (designatedSuperAdmin && profileEmail === designatedSuperAdmin && profile.role !== "SUPER_ADMIN") {
+    console.warn(
+      "[auth] A conta designada como Super Admin (SUPER_ADMIN_EMAIL) não possui role SUPER_ADMIN no banco. Verifique profiles.role.",
+    );
+  }
 
   return {
     id: profile.id,
