@@ -3,7 +3,15 @@ import { getTripBySlug } from "@/lib/booking/actions";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { getSession } from "@/lib/auth/session";
+import { getRepositoryRuntime } from "@/lib/repositories/runtime";
+import { buildWhatsAppUrl, withTripInfo } from "@/lib/contact";
+import {
+  bestPromotionForTrip,
+  eligiblePromotions,
+  promotionSummary,
+} from "@/lib/pricing";
 import { TripCover } from "@/components/trips/trip-cover";
+import { ReviewForm } from "@/components/reviews/review-form";
 
 export default async function TripDetailPage({
   params,
@@ -13,11 +21,35 @@ export default async function TripDetailPage({
   const { slug } = await params;
   const data = await getTripBySlug(slug);
   if (!data) notFound();
-  const { trip, boarding, availableSeats } = data;
+  const { trip, boarding } = data;
   const session = await getSession();
   const reserveHref = session
     ? `/checkout?trip=${trip.slug}`
     : `/login?next=/checkout?trip=${trip.slug}`;
+
+  const store = await getRepositoryRuntime().read();
+  const promotion = bestPromotionForTrip(
+    store,
+    trip,
+    eligiblePromotions(store, trip.id),
+    1,
+  );
+  const promo = promotion ? promotionSummary(store, promotion, trip) : null;
+  const approvedReviews = store.reviews.filter(
+    (r) => r.tripId === trip.id && r.status === "APROVADO",
+  );
+  const alreadyReviewed = store.reviews.some(
+    (r) => r.customerId === session?.id && r.tripId === trip.id,
+  );
+  const canReview =
+    !!session &&
+    !alreadyReviewed &&
+    store.bookings.some(
+      (b) =>
+        b.customerId === session.id &&
+        b.tripId === trip.id &&
+        (b.status === "CONFIRMADA" || b.status === "CONCLUIDA"),
+    );
 
   return (
     <div className="section-pad pt-8 md:pt-12">
@@ -39,26 +71,65 @@ export default async function TripDetailPage({
               {trip.name}
             </h1>
             <p className="mt-3 text-base text-brand-muted md:text-lg">
-              {formatDate(trip.date)} · saída {trip.departureTime} · retorno {trip.returnTime}
+              {trip.returnDate
+                ? `Saída ${formatDate(trip.date)} às ${trip.departureTime} · Retorno ${formatDate(trip.returnDate)} às ${trip.returnTime}`
+                : `${formatDate(trip.date)} · saída ${trip.departureTime} · retorno ${trip.returnTime}`}
             </p>
             <p className="mt-2 text-sm text-brand-muted">{trip.destination}</p>
 
             <div className="mt-6 rounded-2xl border border-brand-line bg-white p-5 shadow-card">
+              {promo && (
+                <div className="mb-4 flex flex-wrap items-center gap-2">
+                  <span className="chip-brand rounded-full px-3 py-1 text-xs font-bold">
+                    Oferta ativa
+                  </span>
+                  <span className="text-sm font-semibold text-brand-primary">
+                    {promo.promotion.name}
+                  </span>
+                  {promo.coupon && (
+                    <span className="rounded-full border border-dashed border-brand-primary/50 bg-brand-tint px-3 py-1 text-xs font-bold text-brand-ink">
+                      Cupom {promo.coupon.code}
+                    </span>
+                  )}
+                </div>
+              )}
               <p className="text-sm text-brand-muted">Valor por pessoa</p>
               <p className="mt-1 text-3xl font-bold text-brand-primary">
-                {formatCurrency(trip.pricePerson)}
+                {promo && promo.hasPriceOverride
+                  ? formatCurrency(promo.personPrice)
+                  : formatCurrency(trip.pricePerson)}
               </p>
-              {trip.priceCouple && (
-                <p className="mt-1 text-sm text-brand-muted">
-                  Dupla: {formatCurrency(trip.priceCouple)}
+              <p className="mt-1 text-sm text-brand-muted">
+                Dupla: {formatCurrency(promo ? promo.couplePrice : trip.priceCouple ?? trip.pricePerson * 2)}
+              </p>
+              {promo && promo.isPercent && (
+                <p className="mt-2 text-sm font-semibold text-emerald-700">
+                  {promo.promotion.discountValue}% de desconto nesta oferta
                 </p>
               )}
-              <p className="mt-3 text-sm font-medium text-brand-ink">
-                {availableSeats} vagas disponíveis de {trip.totalSeats}
-              </p>
+              {promo && promo.isFixed && (
+                <p className="mt-2 text-sm font-semibold text-emerald-700">
+                  {formatCurrency(promo.promotion.discountValue)} de desconto nesta oferta
+                </p>
+              )}
+              {promo && promo.pixRate > 0 && (
+                <p className="mt-1 text-sm text-emerald-700">
+                  + {Math.round(promo.pixRate * 100)}% de desconto no PIX
+                </p>
+              )}
               <div className="mt-5 flex flex-wrap gap-3">
                 <Button href={reserveHref} size="lg">
                   Reservar agora
+                </Button>
+                <Button
+                  href={buildWhatsAppUrl(
+                    store.brand.whatsapp,
+                    withTripInfo(store.brand.whatsappMessage ?? "", trip),
+                  )}
+                  variant="outline"
+                  size="lg"
+                >
+                  Tirar dúvida no WhatsApp
                 </Button>
                 <Button href="/excursoes" variant="outline" size="lg">
                   Ver outras
@@ -96,6 +167,48 @@ export default async function TripDetailPage({
             ))}
           </ul>
         </div>
+
+        {approvedReviews.length > 0 && (
+          <div className="surface-card mt-10 p-6 md:p-8">
+            <h2 className="font-display text-2xl font-bold text-brand-ink">
+              Avaliações de quem já viajou
+            </h2>
+            <ul className="mt-5 space-y-4">
+              {approvedReviews.map((r) => {
+                const reviewer = store.profiles.find(
+                  (p) => p.id === r.customerId,
+                );
+                return (
+                  <li
+                    key={r.id}
+                    className="border-b border-brand-line pb-4 last:border-0 last:pb-0"
+                  >
+                    <div className="flex flex-wrap items-center gap-2">
+                      <p className="font-semibold text-brand-ink">
+                        {reviewer?.fullName ?? "Cliente"}
+                      </p>
+                      <span className="text-amber-500">
+                        {"★".repeat(r.rating)}
+                        {"☆".repeat(5 - r.rating)}
+                      </span>
+                    </div>
+                    {r.comment && (
+                      <p className="mt-1 text-sm leading-relaxed text-brand-muted">
+                        {r.comment}
+                      </p>
+                    )}
+                  </li>
+                );
+              })}
+            </ul>
+          </div>
+        )}
+
+        {canReview && (
+          <div className="mt-10">
+            <ReviewForm tripId={trip.id} />
+          </div>
+        )}
       </div>
     </div>
   );

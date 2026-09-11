@@ -5,6 +5,7 @@ import { createServerClient } from "@supabase/ssr";
 import type { AppRole } from "@/types";
 import { getAuthSecret } from "@/lib/env/server";
 import { getAuthDriver, getSupabaseEnvironment } from "@/lib/supabase/config";
+import { canAccessRole } from "@/lib/roles";
 
 const COOKIE = "prados_session";
 
@@ -78,24 +79,18 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url);
   }
 
-  if (pathname.startsWith("/admin") && !["SUPER_ADMIN", "ADMIN"].includes(session.role)) {
+  if (pathname.startsWith("/admin") && !canAccessRole(session.role, "admin")) {
     return NextResponse.redirect(new URL("/", request.url));
   }
-  if (
-    pathname.startsWith("/financeiro") &&
-    !["SUPER_ADMIN", "ADMIN", "FINANCEIRO"].includes(session.role)
-  ) {
+  if (pathname.startsWith("/financeiro") && !canAccessRole(session.role, "financeiro")) {
     return NextResponse.redirect(new URL("/", request.url));
   }
-  if (
-    pathname.startsWith("/vendedor") &&
-    !["SUPER_ADMIN", "ADMIN", "VENDEDOR"].includes(session.role)
-  ) {
+  if (pathname.startsWith("/vendedor") && !canAccessRole(session.role, "vendedor")) {
     return NextResponse.redirect(new URL("/", request.url));
   }
   if (
     (pathname.startsWith("/operacional") || pathname.startsWith("/check-in")) &&
-    !["SUPER_ADMIN", "ADMIN", "MONITOR"].includes(session.role)
+    !canAccessRole(session.role, "operacional")
   ) {
     return NextResponse.redirect(new URL("/", request.url));
   }

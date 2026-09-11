@@ -2,9 +2,9 @@
 "use client";
 
 import { useMemo, useRef, useState } from "react";
-import { ImagePlus, MapPin, UploadCloud, Trash2, Lightbulb, Save, ArrowLeft, Star } from "lucide-react";
+import { ImagePlus, MapPin, UploadCloud, Trash2, Lightbulb, Save, ArrowLeft, Star, GripVertical, X } from "lucide-react";
 import { upsertTrip } from "@/lib/admin/actions";
-import type { Trip, TripBoardingPoint } from "@/types";
+import type { Trip, TripBoardingPoint, TripStatus } from "@/types";
 
 type BoardingPoint = {
   id: string;
@@ -40,6 +40,17 @@ export default function TripForm({
   const [savedUrls, setSavedUrls] = useState<string[]>(existingUrls);
   const [selectedPoints, setSelectedPoints] = useState<Record<string, boolean>>(initialPoints);
   const [times, setTimes] = useState<Record<string, string>>(initialTimes);
+  const [order, setOrder] = useState<string[]>(
+    (() => {
+      if (tripBoardingPoints && tripBoardingPoints.length > 0) {
+        return [...tripBoardingPoints]
+          .sort((a, b) => (a.sortOrder ?? 0) - (b.sortOrder ?? 0))
+          .map((link) => link.boardingPointId);
+      }
+      return boardingPoints.filter((point) => initialPoints[point.id]).map((point) => point.id);
+    })(),
+  );
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
   const [featured, setFeatured] = useState(true);
   const [formUrl, setFormUrl] = useState(trip?.formUrl ?? "");
   const [formRequired, setFormRequired] = useState(trip?.formRequired ?? true);
@@ -51,10 +62,30 @@ export default function TripForm({
   );
 
   function togglePoint(id: string) {
+    const isSelected = Boolean(selectedPoints[id]);
     setSelectedPoints((current) => ({
       ...current,
       [id]: !current[id],
     }));
+    if (isSelected) {
+      setOrder((current) => current.filter((pointId) => pointId !== id));
+    } else {
+      setOrder((current) =>
+        current.includes(id) ? current : [...current, id],
+      );
+    }
+  }
+
+  function movePoint(from: number, to: number) {
+    setOrder((current) => {
+      if (from < 0 || from >= current.length || to < 0 || to >= current.length) {
+        return current;
+      }
+      const next = [...current];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
   }
 
   function changeTime(id: string, value: string) {
@@ -89,12 +120,17 @@ export default function TripForm({
   }
 
   async function submit(formData: FormData) {
-    const selectedBoardingPoints = boardingPoints
-      .filter((point) => selectedPoints[point.id])
-      .map((point) => ({
-        boardingPointId: point.id,
-        time: times[point.id] || "",
-      }));
+    const selectedBoardingPoints = order
+      .map((pointId) => {
+        const point = boardingPoints.find((point) => point.id === pointId);
+        return point
+          ? { boardingPointId: point.id, time: times[point.id] || "" }
+          : null;
+      })
+      .filter(
+        (item): item is { boardingPointId: string; time: string } =>
+          item !== null,
+      );
 
     formData.set(
       "boardingPoints",
@@ -142,6 +178,7 @@ export default function TripForm({
       date: String(formData.get("date")),
       departureTime: String(formData.get("departureTime")),
       returnTime: String(formData.get("returnTime")),
+      returnDate: String(formData.get("returnDate") || ""),
       pricePerson: Number(formData.get("pricePerson")),
       priceCouple: Number(formData.get("priceCouple") || 0),
       totalSeats: Number(formData.get("totalSeats")),
@@ -151,7 +188,7 @@ export default function TripForm({
       notIncluded: String(formData.get("notIncluded")),
       rules: String(formData.get("rules")),
       cancellationPolicy: String(formData.get("cancellationPolicy")),
-      status: String(formData.get("status")) as "PUBLICADA" | "RASCUNHO",
+      status: String(formData.get("status")) as TripStatus,
       imageUrl: imageUrls[0] || undefined,
       imageUrls,
       formUrl: formUrl.trim() || undefined,
@@ -267,6 +304,18 @@ export default function TripForm({
 
               <div>
                 <label className="mb-2 block text-sm font-semibold text-[#302229]">
+                  Data de retorno
+                </label>
+                <input
+                  name="returnDate"
+                  type="date"
+                  defaultValue={trip?.returnDate ?? ""}
+                  className="h-12 w-full rounded-xl border border-[#ddd2d8] px-4 text-sm outline-none focus:border-[#ec3f88]"
+                />
+              </div>
+
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-[#302229]">
                   Horário de saída *
                 </label>
                 <input
@@ -347,6 +396,10 @@ export default function TripForm({
                 >
                   <option value="PUBLICADA">Publicada</option>
                   <option value="RASCUNHO">Rascunho</option>
+                  <option value="ESGOTADA">Esgotada</option>
+                  <option value="CANCELADA">Cancelada</option>
+                  <option value="FINALIZADA">Finalizada</option>
+                  <option value="ARQUIVADA">Arquivada</option>
                 </select>
               </div>
             </div>
@@ -430,61 +483,83 @@ export default function TripForm({
             </div>
 
             <div className="space-y-2">
-              {boardingPoints.map((point) => {
-                const checked = Boolean(selectedPoints[point.id]);
+              {order.length === 0 && (
+                <p className="rounded-2xl border border-dashed border-[#e3d5dc] bg-[#fffafc] p-4 text-sm text-[#9a8a92]">
+                  Nenhum ponto selecionado ainda. Adicione os pontos na ordem
+                  em que o ônibus passará por eles.
+                </p>
+              )}
+
+              {order.map((pointId, index) => {
+                const point = boardingPoints.find((point) => point.id === pointId);
+                if (!point) return null;
 
                 return (
                   <div
                     key={point.id}
-                    className={`rounded-2xl border p-3 transition ${
-                      checked
-                        ? "border-[#f4b3ce] bg-[#fff7fa]"
-                        : "border-[#eee5e9] bg-white"
+                    draggable
+                    onDragStart={() => setDragIndex(index)}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDragEnd={() => setDragIndex(null)}
+                    onDrop={() => {
+                      if (dragIndex !== null && dragIndex !== index) {
+                        movePoint(dragIndex, index);
+                      }
+                      setDragIndex(null);
+                    }}
+                    className={`flex items-center gap-3 rounded-2xl border p-3 transition ${
+                      dragIndex === index
+                        ? "border-[#ec3f88] bg-[#ffe5f0]"
+                        : "border-[#f4b3ce] bg-[#fff7fa]"
                     }`}
                   >
-                    <div className="flex items-center gap-3">
-                      <button
-                        type="button"
-                        onClick={() => togglePoint(point.id)}
-                        className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border-2 transition ${
-                          checked
-                            ? "border-[#ec3f88] bg-[#ec3f88] text-white"
-                            : "border-[#d9ccd2] bg-white"
-                        }`}
-                      >
-                        {checked ? "✓" : ""}
-                      </button>
+                    <span className="flex h-7 w-7 shrink-0 items-center justify-center rounded-lg bg-[#ec3f88] text-xs font-bold text-white">
+                      {index + 1}
+                    </span>
 
-                      <div className="min-w-0 flex-1">
-                        <p className="font-bold text-[#302229]">
-                          {point.name}
-                        </p>
-                        <p className="text-sm text-[#77666e]">
-                          {point.address}
-                        </p>
-                      </div>
+                    <span
+                      className="cursor-grab select-none text-[#b297a3]"
+                      title="Arraste para reordenar"
+                    >
+                      <GripVertical size={18} />
+                    </span>
 
-                      <div className="w-[145px]">
-                        <label className="mb-1 block text-xs font-medium text-[#77666e]">
-                          Horário de embarque
-                        </label>
-                        <input
-                          name={`boardingTime_${point.id}`}
-                          type="time"
-                          value={times[point.id] || ""}
-                          onChange={(e) =>
-                            changeTime(point.id, e.target.value)
-                          }
-                          className="h-11 w-full rounded-xl border border-[#ddd2d8] bg-white px-3 text-sm font-semibold outline-none focus:border-[#ec3f88]"
-                        />
-                      </div>
+                    <div className="min-w-0 flex-1">
+                      <p className="font-bold text-[#302229]">
+                        {point.name}
+                      </p>
+                      <p className="text-sm text-[#77666e]">
+                        {point.address}
+                      </p>
                     </div>
+
+                    <div className="w-[145px]">
+                      <label className="mb-1 block text-xs font-medium text-[#77666e]">
+                        Horário de embarque
+                      </label>
+                      <input
+                        name={`boardingTime_${point.id}`}
+                        type="time"
+                        value={times[point.id] || ""}
+                        onChange={(event) => changeTime(point.id, event.target.value)}
+                        className="h-11 w-full rounded-xl border border-[#ddd2d8] bg-white px-3 text-sm font-semibold outline-none focus:border-[#ec3f88]"
+                      />
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => togglePoint(point.id)}
+                      className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg text-[#b197a2] transition hover:bg-red-50 hover:text-red-500"
+                      title="Remover ponto"
+                    >
+                      <X size={18} />
+                    </button>
 
                     <input
                       type="checkbox"
                       name="boardingPointIds"
                       value={point.id}
-                      checked={checked}
+                      checked={Boolean(selectedPoints[point.id])}
                       onChange={() => togglePoint(point.id)}
                       className="hidden"
                     />
@@ -492,6 +567,40 @@ export default function TripForm({
                 );
               })}
             </div>
+
+            {boardingPoints.filter((point) => !order.includes(point.id)).length > 0 && (
+              <div className="mt-4 rounded-2xl border border-dashed border-[#e3d5dc] bg-white p-3">
+                <p className="mb-2 text-xs font-bold uppercase tracking-wide text-[#9a8a92]">
+                  Adicionar pontos
+                </p>
+                <div className="space-y-1">
+                  {boardingPoints
+                    .filter((point) => !order.includes(point.id))
+                    .map((point) => (
+                      <div
+                        key={point.id}
+                        className="flex items-center justify-between gap-3 rounded-xl px-2 py-2 hover:bg-[#fffafc]"
+                      >
+                        <div className="min-w-0">
+                          <p className="text-sm font-bold text-[#302229]">
+                            {point.name}
+                          </p>
+                          <p className="text-xs text-[#77666e]">
+                            {point.address}
+                          </p>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => togglePoint(point.id)}
+                          className="shrink-0 rounded-lg border border-[#f4b3ce] px-3 py-1.5 text-xs font-semibold text-[#d82e73] transition hover:bg-[#ffe5f0]"
+                        >
+                          + Adicionar
+                        </button>
+                      </div>
+                    ))}
+                </div>
+              </div>
+            )}
           </section>
 
           {/* TEXTOS */}

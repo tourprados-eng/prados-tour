@@ -23,9 +23,12 @@ export async function generateMetadata(): Promise<Metadata> {
   };
 }
 
-export const viewport: Viewport = {
-  themeColor: "#E84C91",
-};
+export async function generateViewport(): Promise<Viewport> {
+  const store = await getRepositoryRuntime().read();
+  return {
+    themeColor: store.brand.primary || "#E84C91",
+  };
+}
 
 export default function RootLayout({
   children,

@@ -1,12 +1,22 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
-import { createBookingAction } from "@/lib/booking/actions";
+import { useEffect, useMemo, useRef, useState, useTransition } from "react";
+import { createBookingAction, previewBookingPriceAction } from "@/lib/booking/actions";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/form";
-import { calculateTripPrice, formatCurrency } from "@/lib/utils";
+import { formatCurrency, isValidCpf } from "@/lib/utils";
 import { SELLER_CODE_STORAGE_KEY } from "@/components/layout/seller-tracker";
 import type { BoardingPoint, Trip } from "@/types";
+
+type PricePreview = {
+  baseAmount: number;
+  promoDiscount: number;
+  couponDiscount: number;
+  pixDiscount: number;
+  totalAmount: number;
+  promotionName: string | null;
+  couponCode: string | null;
+};
 
 type BoardingRow = {
   id: string;
@@ -31,18 +41,60 @@ const steps = [
   "Confirmação",
 ];
 
+function onlyDigits(value: string): string {
+  return value.replace(/\D/g, "");
+}
+
+function isValidBirthDate(value: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [y, m, d] = value.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  if (
+    date.getFullYear() !== y ||
+    date.getMonth() !== m - 1 ||
+    date.getDate() !== d
+  ) {
+    return false;
+  }
+  if (y < 1900) return false;
+  const today = new Date();
+  const cutoff = new Date(
+    Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()),
+  );
+  return date.getTime() <= cutoff.getTime();
+}
+
+function validatePassenger(p: PassengerDraft): string | null {
+  if (p.name.trim().length < 3) return "Informe o nome completo.";
+  if (!isValidCpf(p.cpf)) return "CPF inválido.";
+  if (!isValidBirthDate(p.birthDate)) return "Data de nascimento inválida.";
+  const phone = onlyDigits(p.phone);
+  if (phone.length < 10 || phone.length > 13) return "Telefone inválido.";
+  return null;
+}
+
+function isValidEmail(value: string): boolean {
+  return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
 export function CheckoutWizard({
   trip,
   boarding,
   availableSeats,
   defaultName,
   defaultPhone,
+  defaultEmail,
+  whatsapp,
+  brandName,
 }: {
   trip: Trip;
   boarding: BoardingRow[];
   availableSeats: number;
   defaultName: string;
   defaultPhone: string;
+  defaultEmail: string;
+  whatsapp: string;
+  brandName: string;
 }) {
   const [step, setStep] = useState(0);
   const [quantity, setQuantity] = useState(1);
@@ -55,6 +107,15 @@ export function CheckoutWizard({
   const [sellerFromLink, setSellerFromLink] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
+  const [price, setPrice] = useState<PricePreview | null>(null);
+  const [priceError, setPriceError] = useState<string | null>(null);
+  const requestId = useRef(
+    typeof crypto !== "undefined" && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `req-${Date.now()}-${Math.random().toString(36).slice(2)}`,
+  );
+  const submitted = useRef(false);
+  const [responsibleEmail, setResponsibleEmail] = useState(defaultEmail);
   const [passengers, setPassengers] = useState<PassengerDraft[]>([
     {
       name: defaultName,
@@ -77,18 +138,39 @@ export function CheckoutWizard({
     }
   }, []);
 
-  const base = useMemo(
-    () => calculateTripPrice(quantity, trip.pricePerson, trip.priceCouple),
-    [quantity, trip],
-  );
-  const pixDiscount = method === "PIX" && plan === "TOTAL" ? Math.round(base * 0.02 * 100) / 100 : 0;
-  const total = Math.max(0, base - pixDiscount);
+  // Valores oficiais vindos do motor de preços no servidor.
+  useEffect(() => {
+    let active = true;
+    setPriceError(null);
+    const timer = setTimeout(async () => {
+      const result = await previewBookingPriceAction({
+        tripId: trip.id,
+        quantity,
+        paymentMethod: method,
+        paymentPlan: method === "CARTAO" ? "TOTAL" : plan,
+        couponCode: couponCode.trim() ? couponCode.trim() : undefined,
+      });
+      if (!active) return;
+      if (!result) return;
+      if ("error" in result) {
+        setPriceError(result.error);
+        return;
+      }
+      setPrice(result);
+    }, 350);
+    return () => {
+      active = false;
+      clearTimeout(timer);
+    };
+  }, [trip.id, quantity, method, plan, couponCode, trip]);
+
+  const base = useMemo(() => price?.baseAmount ?? null, [price]);
+  const discount = price ? price.promoDiscount + price.couponDiscount + price.pixDiscount : 0;
+  const total = price ? price.totalAmount : base ?? 0;
   const initial =
-    method === "CARTAO"
+    method === "CARTAO" || plan === "TOTAL"
       ? total
-      : plan === "TOTAL"
-        ? total
-        : Math.round((total / 2) * 100) / 100;
+      : Math.round((total / 2) * 100) / 100;
 
   function updateQuantity(q: number) {
     const next = Math.max(1, Math.min(availableSeats, q));
@@ -101,7 +183,7 @@ export function CheckoutWizard({
           cpf: "",
           birthDate: "",
           phone: "",
-          seatGroup: String(copy.length + 1),
+          seatGroup: "1",
         });
       }
       return copy.slice(0, next);
@@ -109,7 +191,24 @@ export function CheckoutWizard({
   }
 
   function submit() {
+    if (submitted.current) return;
+
+    const problems: string[] = [];
+    passengers.forEach((p, idx) => {
+      const err = validatePassenger(p);
+      if (err) problems.push(`Passageiro ${idx + 1}: ${err}`);
+    });
+    if (responsibleEmail && !isValidEmail(responsibleEmail)) {
+      problems.push("E-mail do responsável inválido.");
+    }
+    if (problems.length > 0) {
+      setError(problems.join(" • "));
+      setStep(1);
+      return;
+    }
+
     setError(null);
+    submitted.current = true;
     startTransition(async () => {
       const result = await createBookingAction({
         tripId: trip.id,
@@ -120,6 +219,8 @@ export function CheckoutWizard({
         installmentCount: method === "CARTAO" ? installments : undefined,
         couponCode: couponCode || undefined,
         sellerCode: sellerCode || undefined,
+        clientRequestId: requestId.current,
+        responsibleEmail: responsibleEmail || undefined,
         passengers: passengers.map((p) => ({
           name: p.name,
           cpf: p.cpf,
@@ -129,6 +230,7 @@ export function CheckoutWizard({
         })),
       });
       if (result?.error) {
+        submitted.current = false;
         setError(result.error);
         return;
       }
@@ -137,7 +239,7 @@ export function CheckoutWizard({
         const responsible = passengers[0];
 
         const message = [
-          "Olá, Prado’s Tour!",
+          `Olá, ${brandName || "Prado’s Tour"}!`,
           "",
           "Acabei de realizar uma reserva pelo site e gostaria de finalizar o pagamento via cartão.",
           "",
@@ -162,11 +264,12 @@ export function CheckoutWizard({
           "",
           "Por favor, poderiam gerar e me enviar o link de pagamento para eu finalizar minha reserva?",
           "",
-          "Prado’s Tour"
+          brandName || "Prado's Tour"
         ].join("\n");
 
+        const whatsappNumber = onlyDigits(whatsapp);
         window.location.href =
-          `https://wa.me/5511998639502?text=${encodeURIComponent(message)}`;
+          `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
       }
     });
   }
@@ -204,67 +307,91 @@ export function CheckoutWizard({
               value={quantity}
               onChange={(e) => updateQuantity(Number(e.target.value))}
             />
-            <p className="text-sm text-[#6B5B63]">{availableSeats} vagas disponíveis</p>
           </div>
         )}
 
         {step === 1 && (
           <div className="space-y-6">
-            {passengers.map((p, idx) => (
-              <div key={idx} className="grid gap-3 sm:grid-cols-2">
-                <p className="sm:col-span-2 font-semibold text-[#2F2328]">
-                  Passageiro {idx + 1}
-                </p>
-                <div className="sm:col-span-2">
-                  <Label>Nome</Label>
-                  <Input
-                    value={p.name}
-                    onChange={(e) => {
-                      const next = [...passengers];
-                      next[idx] = { ...p, name: e.target.value };
-                      setPassengers(next);
-                    }}
-                    required
-                  />
+            {passengers.map((p, idx) => {
+              const fieldError = validatePassenger(p);
+              return (
+                <div key={idx} className="grid gap-3 sm:grid-cols-2">
+                  <p className="sm:col-span-2 font-semibold text-[#2F2328]">
+                    {idx === 0
+                      ? "Responsável pela compra"
+                      : `Quem vai viajar junto — Passageiro ${idx + 1}`}
+                  </p>
+                  {idx === 0 && (
+                    <p className="sm:col-span-2 -mt-2 text-xs text-[#8A7A82]">
+                      Contato de quem está fazendo esta reserva.
+                    </p>
+                  )}
+                  <div className="sm:col-span-2">
+                    <Label>Nome completo</Label>
+                    <Input
+                      value={p.name}
+                      onChange={(e) => {
+                        const next = [...passengers];
+                        next[idx] = { ...p, name: e.target.value };
+                        setPassengers(next);
+                      }}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <Label>CPF</Label>
+                    <Input
+                      value={p.cpf}
+                      placeholder="000.000.000-00"
+                      onChange={(e) => {
+                        const next = [...passengers];
+                        next[idx] = { ...p, cpf: e.target.value };
+                        setPassengers(next);
+                      }}
+                    />
+                  </div>
+                  <div>
+                    <Label>Nascimento</Label>
+                    <Input
+                      type="date"
+                      value={p.birthDate}
+                      onChange={(e) => {
+                        const next = [...passengers];
+                        next[idx] = { ...p, birthDate: e.target.value };
+                        setPassengers(next);
+                      }}
+                    />
+                  </div>
+                  <div className="sm:col-span-2">
+                    <Label>Telefone (WhatsApp)</Label>
+                    <Input
+                      value={p.phone}
+                      placeholder="(11) 00000-0000"
+                      onChange={(e) => {
+                        const next = [...passengers];
+                        next[idx] = { ...p, phone: e.target.value };
+                        setPassengers(next);
+                      }}
+                    />
+                  </div>
+                  {idx === 0 && (
+                    <div className="sm:col-span-2">
+                      <Label>E-mail do responsável</Label>
+                      <Input
+                        type="email"
+                        value={responsibleEmail}
+                        onChange={(e) => setResponsibleEmail(e.target.value)}
+                      />
+                    </div>
+                  )}
+                  {fieldError && (
+                    <p className="sm:col-span-2 rounded-xl bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
+                      {fieldError}
+                    </p>
+                  )}
                 </div>
-                <div>
-                  <Label>CPF</Label>
-                  <Input
-                    value={p.cpf}
-                    onChange={(e) => {
-                      const next = [...passengers];
-                      next[idx] = { ...p, cpf: e.target.value };
-                      setPassengers(next);
-                    }}
-                  />
-                </div>
-                <div>
-                  <Label>Nascimento</Label>
-                  <Input
-                    type="date"
-                    value={p.birthDate}
-                    onChange={(e) => {
-                      const next = [...passengers];
-                      next[idx] = { ...p, birthDate: e.target.value };
-                      setPassengers(next);
-                    }}
-                  />
-                </div>
-                <div className="sm:col-span-2">
-                  <Label>Telefone</Label>
-                  <Input
-                    value={p.phone}
-                    onChange={(e) => {
-                      const next = [...passengers];
-                      next[idx] = { ...p, phone: e.target.value };
-                      setPassengers(next);
-                    }}
-                  />
-                </div>
-
-
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
 
@@ -288,12 +415,12 @@ export function CheckoutWizard({
                   className="rounded-2xl border border-[#EBE4E7] bg-[#FAF7F8] p-4"
                 >
                   <p className="font-semibold text-[#2F2328]">
-                    Passageiro {idx + 1}
+                    {idx === 0 ? "Responsável pela compra" : `Passageiro ${idx + 1}`}
                     {p.name ? ` — ${p.name}` : ""}
                   </p>
 
                   <div className="mt-3">
-                    <Label>Preferência</Label>
+                    <Label>Preferência de assento</Label>
                     <Select
                       value={p.seatGroup}
                       onChange={(e) => {
@@ -305,23 +432,7 @@ export function CheckoutWizard({
                         setPassengers(next);
                       }}
                     >
-                      <option value="1">
-                        Grupo 1 — sentar junto
-                      </option>
-
-                      {Array.from(
-                        { length: Math.max(0, quantity - 1) },
-                        (_, i) => {
-                          const group = String(i + 2);
-
-                          return (
-                            <option key={group} value={group}>
-                              Grupo {group} — sentar junto
-                            </option>
-                          );
-                        },
-                      )}
-
+                      <option value="1">Junto com o grupo</option>
                       <option value={`SEPARADO-${idx + 1}`}>
                         Separado — não sentar junto
                       </option>
@@ -409,8 +520,13 @@ export function CheckoutWizard({
               <Input
                 value={couponCode}
                 onChange={(e) => setCouponCode(e.target.value)}
-                placeholder="PRADOS10"
+                placeholder="ex.: BEMVINDO10"
               />
+              {priceError && (
+                <p className="mt-1.5 rounded-lg bg-red-50 px-2 py-1 text-xs font-medium text-red-700">
+                  {priceError}
+                </p>
+              )}
             </div>
             <div>
               <Label>Código do vendedor (opcional)</Label>
@@ -449,16 +565,46 @@ export function CheckoutWizard({
               )}
             </div>
             <div className="rounded-2xl border border-[#EBE4E7] bg-[#FAF7F8] p-4">
-              <p className="text-sm text-[#6B5B63]">Subtotal: {formatCurrency(base)}</p>
-              {pixDiscount > 0 && (
-                <p className="text-sm text-emerald-700">
-                  Desconto PIX: -{formatCurrency(pixDiscount)}
+              {base == null ? (
+                <p className="text-sm text-[#6B5B63]">
+                  Calculando valores na Confirmação do pagamento...
                 </p>
+              ) : (
+                <>
+                  <div className="flex items-center justify-between gap-3 text-sm text-[#6B5B63]">
+                    <span>Subtotal ({quantity} passageiro{quantity === 1 ? "" : "s"})</span>
+                    <span>{formatCurrency(base)}</span>
+                  </div>
+                  {price?.promotionName && price.promoDiscount > 0 && (
+                    <div className="flex items-center justify-between gap-3 text-sm text-[#D92F75]">
+                      <span>Promoção: {price.promotionName}</span>
+                      <span>-{formatCurrency(price.promoDiscount)}</span>
+                    </div>
+                  )}
+                  {price?.couponCode && price.couponDiscount > 0 && (
+                    <div className="flex items-center justify-between gap-3 text-sm text-[#D92F75]">
+                      <span>Cupom {price.couponCode}</span>
+                      <span>-{formatCurrency(price.couponDiscount)}</span>
+                    </div>
+                  )}
+                  {price && price.pixDiscount > 0 && (
+                    <div className="flex items-center justify-between gap-3 text-sm text-emerald-700">
+                      <span>Desconto PIX à vista</span>
+                      <span>-{formatCurrency(price.pixDiscount)}</span>
+                    </div>
+                  )}
+                  {discount > 0 && (
+                    <div className="mt-2 flex items-center justify-between gap-3 border-t border-[#EBE4E7] pt-2 text-sm text-emerald-700">
+                      <span>Total de descontos</span>
+                      <span>-{formatCurrency(discount)}</span>
+                    </div>
+                  )}
+                </>
               )}
               <p className="mt-2 text-xl font-bold text-[#2F2328]">
                 Total a pagar agora: {formatCurrency(initial)}
               </p>
-              {plan === "PARCIAL" && (
+              {plan === "PARCIAL" && method === "PIX" && (
                 <p className="text-sm text-[#6B5B63]">
                   Saldo restante: {formatCurrency(total - initial)} (vencimento 7 dias antes)
                 </p>

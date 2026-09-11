@@ -8,18 +8,8 @@ import { formatCurrency } from "@/lib/utils";
 import { simulateGatewayConfirm } from "@/lib/booking/actions";
 import { Button } from "@/components/ui/button";
 import { logoutAction } from "@/lib/auth/actions";
-
-const adminLinks = [
-  { href: "/admin", label: "Dashboard" },
-  { href: "/admin/reservas", label: "Reservas" },
-  { href: "/admin/viagens", label: "Viagens" },
-  { href: "/admin/clientes", label: "Clientes" },
-  { href: "/admin/vendedores", label: "Vendedores" },
-  { href: "/admin/cupons", label: "Cupons" },
-  { href: "/financeiro", label: "Financeiro" },
-  { href: "/admin/despesas", label: "Despesas" },
-  { href: "/admin/configuracoes", label: "Configurações" },
-];
+import { navItemsForRole } from "@/lib/navigation";
+import { homeForRole, roleLabel } from "@/lib/roles";
 
 function formatDate(value: string) {
   return new Intl.DateTimeFormat("pt-BR").format(new Date(value));
@@ -47,6 +37,8 @@ export default async function FinancePage() {
 
   const metrics = await getDashboardMetrics();
   const store = await getRepositoryRuntime().read();
+  const navItems = navItemsForRole(session.role);
+  const panelHome = homeForRole(session.role);
 
   const byTrip = store.trips.map((t) => {
     const revenue = store.bookings
@@ -99,7 +91,7 @@ export default async function FinancePage() {
       <div className="flex min-h-screen">
         <aside className="hidden w-64 shrink-0 border-r border-[#E8DFE3] bg-white lg:flex lg:flex-col">
           <div className="border-b border-[#F0E8EB] px-5 py-6">
-            <Link href="/admin" className="flex items-center gap-3">
+            <Link href={panelHome} className="flex items-center gap-3">
               <Image
                 src={store.brand.logoUrl}
                 alt={store.brand.companyName}
@@ -113,7 +105,7 @@ export default async function FinancePage() {
                   {store.brand.companyName}
                 </p>
                 <p className="mt-0.5 text-xs font-semibold uppercase tracking-wide text-black/40">
-                  Painel Admin
+                  {roleLabel(session.role)}
                 </p>
               </div>
             </Link>
@@ -125,7 +117,7 @@ export default async function FinancePage() {
             </p>
 
             <div className="space-y-1">
-              {adminLinks.map((item) => {
+              {navItems.map((item) => {
                 const active = item.href === "/financeiro";
 
                 return (
@@ -145,23 +137,7 @@ export default async function FinancePage() {
                           : "bg-black/[0.035]"
                       }`}
                     >
-                      {item.label === "Dashboard"
-                        ? "⌂"
-                        : item.label === "Reservas"
-                          ? "▣"
-                          : item.label === "Viagens"
-                            ? "▤"
-                            : item.label === "Clientes"
-                              ? "♙"
-                              : item.label === "Vendedores"
-                                ? "♧"
-                                : item.label === "Cupons"
-                                  ? "◇"
-                                  : item.label === "Financeiro"
-                                    ? "▥"
-                                    : item.label === "Despesas"
-                                      ? "▤"
-                                      : "⚙"}
+                      {item.icon}
                     </span>
 
                     {item.label}
@@ -189,17 +165,17 @@ export default async function FinancePage() {
         <main className="min-w-0 flex-1">
           <header className="sticky top-0 z-20 flex min-h-[76px] items-center justify-between border-b border-[#E8DFE3] bg-white/95 px-5 backdrop-blur-xl md:px-8">
             <Link
-              href="/admin"
+              href={panelHome}
               className="inline-flex items-center gap-2 rounded-2xl border border-[#F0B7CE] px-4 py-2.5 text-sm font-bold text-[#C52D70] transition hover:bg-[#FFF3F7]"
             >
               <span className="text-lg">←</span>
-              Voltar
+              Painel
             </Link>
 
             <div className="flex items-center gap-3">
               <div className="hidden text-right sm:block">
                 <p className="text-sm font-bold">{session.fullName}</p>
-                <p className="text-xs text-black/45">Administrador</p>
+                <p className="text-xs text-black/45">{roleLabel(session.role)}</p>
               </div>
 
               <div className="flex h-11 w-11 items-center justify-center rounded-full bg-[#E84C91] text-sm font-bold text-white">

@@ -3,9 +3,12 @@
 import { v4 as uuid } from "uuid";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
+import { z } from "zod";
 import { getSession, canAccess } from "@/lib/auth/session";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
-import { calculateTripPrice, onlyDigits } from "@/lib/utils";
+import { isValidCpf, onlyDigits } from "@/lib/utils";
+import { canAccessRole } from "@/lib/roles";
+import { computeBookingPrice } from "@/lib/pricing";
 import type { PaymentMethod, PaymentPlan } from "@/types";
 
 export type CheckoutInput = {
@@ -24,7 +27,35 @@ export type CheckoutInput = {
     seatGroup?: string;
   }>;
   sellerCode?: string;
+  /** Identificador da sessão de checkout (evita reserva duplicada no retry). */
+  clientRequestId?: string;
+  /** E-mail do responsável pela compra (validado; contato usa o e-mail da conta). */
+  responsibleEmail?: string;
 };
+
+const birthDateSchema = z.string().refine((value) => {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
+  const [y, m, d] = value.split("-").map(Number);
+  const date = new Date(y, m - 1, d);
+  if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return false;
+  if (y < 1900) return false;
+  const today = new Date();
+  const cutoff = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
+  return date.getTime() <= cutoff.getTime();
+}, { message: "Data de nascimento inválida." });
+
+const passengerSchema = z.object({
+  name: z.string().trim().min(3, "Informe o nome completo de cada passageiro."),
+  cpf: z.string().refine((v) => isValidCpf(v), { message: "CPF inválido." }),
+  birthDate: birthDateSchema,
+  phone: z
+    .string()
+    .transform(onlyDigits)
+    .refine((v) => v.length >= 10 && v.length <= 13, {
+      message: "Telefone inválido para um passageiro.",
+    }),
+  seatGroup: z.string().max(24).optional(),
+});
 
 export async function createBookingAction(input: CheckoutInput) {
   const session = await getSession();
@@ -32,10 +63,25 @@ export async function createBookingAction(input: CheckoutInput) {
     return { error: "Faça login para reservar." };
   }
 
-  let bookingId: string;
-  let reference = "";
+  let outcome: { bookingId: string; reference: string } | null = null;
   try {
-    bookingId = await getRepositoryRuntime().transaction((store) => {
+    const passengersResult = z.array(passengerSchema).safeParse(input.passengers ?? []);
+    if (!passengersResult.success) {
+      return {
+        error:
+          passengersResult.error.issues[0]?.message ??
+          "Dados de passageiros inválidos.",
+      };
+    }
+
+    if (
+      input.responsibleEmail &&
+      !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(input.responsibleEmail)
+    ) {
+      return { error: "E-mail do responsável inválido." };
+    }
+
+    outcome = await getRepositoryRuntime().transaction((store) => {
       const trip = store.trips.find((t) => t.id === input.tripId);
       if (!trip || trip.status !== "PUBLICADA" || trip.deletedAt) {
         throw new Error("Viagem indisponível.");
@@ -45,6 +91,22 @@ export async function createBookingAction(input: CheckoutInput) {
       }
       if (input.quantity < 1 || input.passengers.length !== input.quantity) {
         throw new Error("Quantidade de passageiros inválida.");
+      }
+
+      // Idempotência: mesma viagem + cliente + requisição (ou reserva recente
+      // idêntica) retorna a reserva já criada, sem duplicar no refresh/retry.
+      const recentWindow = new Date(Date.now() - 60_000).toISOString();
+      const existing = store.bookings.find(
+        (b) =>
+          b.customerId === session.id &&
+          b.tripId === trip.id &&
+          ((input.clientRequestId && b.clientRequestId === input.clientRequestId) ||
+            (b.status === "PENDENTE" &&
+              b.createdAt >= recentWindow &&
+              b.quantity === input.quantity)),
+      );
+      if (existing) {
+        return { bookingId: existing.id, reference: existing.reference };
       }
 
       const occupied = store.passengers.filter((p) => {
@@ -79,37 +141,21 @@ export async function createBookingAction(input: CheckoutInput) {
         );
       }
 
-      const base = calculateTripPrice(input.quantity, trip.pricePerson, trip.priceCouple);
-      let discount = 0;
-      let couponCode: string | null = null;
+      // Preço, promoção, cupom e PIX calculados pelo motor central de preços.
+      const pricing = computeBookingPrice({
+        store,
+        trip,
+        quantity: input.quantity,
+        paymentMethod: input.paymentMethod,
+        paymentPlan: input.paymentPlan,
+        couponCode: input.couponCode,
+        userId: session.id,
+      });
+      if (pricing.error) throw new Error(pricing.error);
+      if (!pricing.breakdown) throw new Error("Erro ao calcular o valor da reserva.");
 
-      if (input.couponCode) {
-        const coupon = store.coupons.find(
-          (c) => c.code.toUpperCase() === input.couponCode!.toUpperCase() && c.active,
-        );
-        if (!coupon) throw new Error("Cupom inválido.");
-        if (coupon.validUntil && coupon.validUntil < new Date().toISOString()) {
-          throw new Error("Cupom expirado.");
-        }
-        if (coupon.tripIds.length && !coupon.tripIds.includes(trip.id)) {
-          throw new Error("Cupom não válido para esta viagem.");
-        }
-        const used = store.couponUsages.filter((u) => u.couponId === coupon.id).length;
-        if (coupon.usageLimit != null && used >= coupon.usageLimit) {
-          throw new Error("Limite do cupom atingido.");
-        }
-        discount =
-          coupon.type === "PERCENTUAL"
-            ? Math.round(((base * coupon.value) / 100) * 100) / 100
-            : Math.min(base, coupon.value);
-        couponCode = coupon.code;
-      }
-
-      if (input.paymentMethod === "PIX" && input.paymentPlan === "TOTAL") {
-        discount += Math.round(base * store.paymentSettings.pixTotalDiscount * 100) / 100;
-      }
-
-      const total = Math.max(0, Math.round((base - discount) * 100) / 100);
+      const price = pricing.breakdown;
+      const total = price.totalAmount;
 
       if (
         input.paymentMethod === "CARTAO" &&
@@ -121,7 +167,7 @@ export async function createBookingAction(input: CheckoutInput) {
       }
 
       const now = new Date().toISOString();
-      reference = `PT${String(store.bookings.length + 1).padStart(6, "0")}`;
+      const reference = `PT${String(store.bookings.length + 1).padStart(6, "0")}`;
       const bookingId = uuid();
 
       let sellerId: string | null = null;
@@ -144,11 +190,17 @@ export async function createBookingAction(input: CheckoutInput) {
         boardingPointId: boarding.id,
         boardingPoint: boarding.name,
         totalAmount: total,
-        baseAmount: base,
-        discountAmount: discount,
-        couponCode,
+        baseAmount: price.baseAmount,
+        discountAmount: price.discountAmount,
+        couponCode: price.couponCode,
+        promotionId: price.promotion?.id ?? null,
+        promotionName: price.promotion?.name ?? null,
+        promotionDiscount: price.promoDiscount,
+        couponDiscount: price.couponDiscount,
+        pixDiscount: price.pixDiscount,
         paymentPlan: input.paymentPlan,
         status: "PENDENTE",
+        clientRequestId: input.clientRequestId ?? null,
         notes: null,
         createdAt: now,
         updatedAt: now,
@@ -171,11 +223,20 @@ export async function createBookingAction(input: CheckoutInput) {
         });
       }
 
-      if (couponCode) {
-        const coupon = store.coupons.find((c) => c.code === couponCode)!;
+      if (price.coupon) {
         store.couponUsages.push({
           id: uuid(),
-          couponId: coupon.id,
+          couponId: price.coupon.id,
+          userId: session.id,
+          bookingId,
+          createdAt: now,
+        });
+      }
+
+      if (price.promotion) {
+        store.promotionUsages.push({
+          id: uuid(),
+          promotionId: price.promotion.id,
           userId: session.id,
           bookingId,
           createdAt: now,
@@ -289,7 +350,7 @@ export async function createBookingAction(input: CheckoutInput) {
         });
 
         for (const admin of store.profiles.filter((p) =>
-          ["SUPER_ADMIN", "ADMIN"].includes(p.role),
+          canAccessRole(p.role, "admin"),
         )) {
           store.notifications.push({
             id: uuid(),
@@ -329,11 +390,17 @@ export async function createBookingAction(input: CheckoutInput) {
         trip.status = "ESGOTADA";
       }
 
-      return bookingId;
+      return { bookingId, reference };
     });
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Erro ao criar reserva." };
   }
+
+  if (!outcome) {
+    return { error: "Erro ao criar reserva." };
+  }
+
+  const { bookingId, reference } = outcome;
 
   revalidatePath("/");
   revalidatePath("/minhas-viagens");
@@ -343,6 +410,62 @@ export async function createBookingAction(input: CheckoutInput) {
   }
 
   redirect(`/checkout/sucesso?booking=${bookingId}`);
+}
+
+/**
+ * Preview autoritativo de preço para o checkout. O frontend exibe os descontos
+ * calculados aqui; o valor final é recalculado novamente no createBookingAction.
+ */
+export async function previewBookingPriceAction(input: {
+  tripId: string;
+  quantity: number;
+  paymentMethod: PaymentMethod;
+  paymentPlan: PaymentPlan;
+  couponCode?: string;
+}): Promise<
+  | {
+      baseAmount: number;
+      promoDiscount: number;
+      couponDiscount: number;
+      pixDiscount: number;
+      totalAmount: number;
+      promotionName: string | null;
+      couponCode: string | null;
+    }
+  | { error: string }
+> {
+  const session = await getSession();
+  if (!session) return { error: "Faça login para reservar." };
+
+  const store = await getRepositoryRuntime().read();
+  const trip = store.trips.find((t) => t.id === input.tripId);
+  if (!trip || trip.status !== "PUBLICADA" || trip.deletedAt) {
+    return { error: "Viagem indisponível." };
+  }
+
+  const pricing = computeBookingPrice({
+    store,
+    trip,
+    quantity: input.quantity,
+    paymentMethod: input.paymentMethod,
+    paymentPlan: input.paymentPlan,
+    couponCode: input.couponCode,
+    userId: session.id,
+  });
+  if (pricing.error || !pricing.breakdown) {
+    return { error: pricing.error ?? "Erro ao calcular o valor." };
+  }
+
+  const b = pricing.breakdown;
+  return {
+    baseAmount: b.baseAmount,
+    promoDiscount: b.promoDiscount,
+    couponDiscount: b.couponDiscount,
+    pixDiscount: b.pixDiscount,
+    totalAmount: b.totalAmount,
+    promotionName: b.promotion?.name ?? null,
+    couponCode: b.couponCode,
+  };
 }
 
 /** Confirma pagamento via webhook/gateway — nunca pelo clique "já paguei". */
@@ -382,6 +505,17 @@ export async function confirmPaymentWebhook(gatewayPaymentId: string) {
         read: false,
         createdAt: now,
       });
+      store.auditLogs.push({
+        id: uuid(),
+        userId: null,
+        action: "PAYMENT_CONFIRMED",
+        entity: "booking",
+        entityId: booking.id,
+        oldValue: { method: payment.method },
+        newValue: { status: "PAGO", reference: booking.reference },
+        ip: null,
+        createdAt: now,
+      });
     }
   });
   revalidatePath("/admin");
@@ -390,7 +524,7 @@ export async function confirmPaymentWebhook(gatewayPaymentId: string) {
 
 export async function simulateGatewayConfirm(paymentId: string) {
   const session = await getSession();
-  if (!session || !["SUPER_ADMIN", "ADMIN", "FINANCEIRO"].includes(session.role)) {
+  if (!session || !canAccessRole(session.role, "financeiro")) {
     return { error: "Sem permissão." };
   }
   const store = await getRepositoryRuntime().read();
@@ -480,5 +614,10 @@ export async function getTripBySlug(slug: string) {
     return b && b.tripId === trip.id && (b.status === "PENDENTE" || b.status === "CONFIRMADA");
   }).length;
   const seats = store.seats.filter((s) => s.tripId === trip.id);
-  return { trip, boarding, availableSeats: trip.totalSeats - occupied, seats };
+  return {
+    trip,
+    boarding,
+    availableSeats: Math.max(0, trip.totalSeats - occupied),
+    seats,
+  };
 }

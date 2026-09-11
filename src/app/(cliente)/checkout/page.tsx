@@ -25,6 +25,9 @@ export default async function CheckoutPage({
       availableSeats={data.availableSeats}
       defaultName={profile?.fullName || session.fullName}
       defaultPhone={profile?.phone || ""}
+      defaultEmail={session.email}
+      whatsapp={store.brand.whatsapp}
+      brandName={store.brand.companyName}
     />
   );
 }

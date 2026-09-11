@@ -8,6 +8,7 @@ export default async function OperationalPage() {
   const session = await getSession();
   if (!session || !canAccess(session.role, "operacional")) redirect("/login");
   const store = await getRepositoryRuntime().read();
+  const isMonitorOnly = session.role === "MONITOR";
   const trips = store.trips
     .filter((t) => !t.deletedAt && (t.status === "PUBLICADA" || t.status === "ESGOTADA"))
     .sort((a, b) => a.date.localeCompare(b.date));
@@ -18,8 +19,13 @@ export default async function OperationalPage() {
         Painel operacional
       </h1>
       <p className="mt-2 text-black/60">Monitor/guia — sem acesso ao financeiro.</p>
-      <div className="mt-6">
+      <div className="mt-6 flex flex-wrap gap-3">
         <Button href="/check-in">Abrir check-in</Button>
+        {!isMonitorOnly && (
+          <Button href="/admin" variant="outline">
+            Painel administrativo
+          </Button>
+        )}
       </div>
       <div className="mt-8 space-y-4">
         {trips.map((t) => {

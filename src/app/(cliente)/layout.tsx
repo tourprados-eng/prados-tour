@@ -3,6 +3,10 @@ import { SiteHeader, MobileNav } from "@/components/layout/site-header";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SellerTracker } from "@/components/layout/seller-tracker";
 
+// Depende de sessão autenticada e de dados dinâmicos do repositório; não é
+// estático e não deve ser pré-renderizado em build.
+export const dynamic = "force-dynamic";
+
 export default async function ClienteLayout({
   children,
 }: {

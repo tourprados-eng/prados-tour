@@ -10,7 +10,7 @@ import { revalidatePath } from "next/cache";
 import { getSession, canAccess } from "@/lib/auth/session";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import { getAuthDriver, assertSupabaseServerConfiguration } from "@/lib/supabase/config";
-import type { BrandSettings, DataStore, Trip, TripStatus } from "@/types";
+import type { BrandSettings, DataStore, PaymentSettings, Promotion, PromoBannerSettings, Trip, TripStatus, VoucherSettings } from "@/types";
 import { slugify, formatCurrency } from "@/lib/utils";
 
 function nextSellerCode(existing: string[], prefix = "VD"): string {
@@ -207,6 +207,54 @@ export async function createSellerAction(
   }
 }
 
+export async function lookupCheckinBooking(reference: string) {
+  const session = await getSession();
+  if (!session || !canAccess(session.role, "operacional")) {
+    return { error: "Sem permissão para check-in." };
+  }
+
+  const store = await getRepositoryRuntime().read();
+  const booking = store.bookings.find(
+    (b) => b.reference.toUpperCase() === reference.toUpperCase().trim(),
+  );
+  if (!booking) return { error: "RESERVA NÃO ENCONTRADA" };
+
+  const trip = store.trips.find((t) => t.id === booking.tripId);
+  const passengers = store.passengers
+    .filter((p) => p.bookingId === booking.id)
+    .map((p) => {
+      const seat = store.seats.find((s) => s.id === p.seatId);
+      return {
+        id: p.id,
+        name: p.name,
+        seat: seat ? `Assento ${seat.seatNumber}` : null,
+        checkedIn: store.checkins.some((c) => c.passengerId === p.id),
+        checkedAt:
+          store.checkins.find((c) => c.passengerId === p.id)?.checkedAt ??
+          null,
+      };
+    });
+
+  return {
+    booking: {
+      reference: booking.reference,
+      status: booking.status,
+      quantity: booking.quantity,
+      customerName:
+        store.profiles.find((profile) => profile.id === booking.customerId)
+          ?.fullName ?? "Cliente",
+    },
+    trip: trip
+      ? {
+          name: trip.name,
+          date: trip.date,
+          departureTime: trip.departureTime,
+        }
+      : null,
+    passengers,
+  };
+}
+
 export async function performCheckin(reference: string, passengerId?: string) {
   const session = await getSession();
   if (!session || !canAccess(session.role, "operacional")) {
@@ -245,6 +293,17 @@ export async function performCheckin(reference: string, passengerId?: string) {
       read: false,
       createdAt: now,
     });
+    store.auditLogs.push({
+      id: uuid(),
+      userId: session.id,
+      action: "PERFORM_CHECKIN",
+      entity: "booking",
+      entityId: booking.id,
+      oldValue: null,
+      newValue: { reference: booking.reference, passengerId: target.id },
+      ip: null,
+      createdAt: now,
+    });
     revalidatePath("/operacional");
     return { ok: true, message: "PASSAGEIRO CONFIRMADO", booking, passenger: target };
   });
@@ -255,8 +314,8 @@ export async function uploadBrandImage(
 ) {
   const session = await getSession();
 
-  if (!session || !canAccess(session.role, "admin")) {
-    return { error: "Sem permissão." };
+  if (!session || session.role !== "SUPER_ADMIN") {
+    return { error: "Sem permissão. Apenas o Super Admin pode alterar configurações." };
   }
 
   const type = String(formData.get("type") || "");
@@ -356,9 +415,154 @@ export async function uploadBrandImage(
   };
 }
 
+export async function createBoardingPoint(data: {
+  name: string;
+  city: string;
+  address: string;
+  observations: string;
+}) {
+  const session = await getSession();
+  if (!session || session.role !== "SUPER_ADMIN") {
+    return { error: "Sem permissão. Apenas o Super Admin pode gerenciar pontos de embarque." };
+  }
+
+  const name = data.name.trim();
+  const city = data.city.trim();
+  const address = data.address.trim();
+  const observations = data.observations.trim();
+
+  if (!name || !city || !address) {
+    return { error: "Nome, cidade e endereço são obrigatórios." };
+  }
+
+  const id = uuid();
+  const now = new Date().toISOString();
+
+  await getRepositoryRuntime().transaction((store) => {
+    const point = {
+      id,
+      name,
+      city,
+      address,
+      latitude: null,
+      longitude: null,
+      observations,
+      active: true,
+    };
+
+    store.boardingPoints.push(point);
+
+    store.auditLogs.push({
+      id: uuid(),
+      userId: session.id,
+      action: "CREATE_BOARDING_POINT",
+      entity: "boarding_points",
+      entityId: id,
+      oldValue: null,
+      newValue: point,
+      ip: null,
+      createdAt: now,
+    });
+  });
+
+  revalidatePath("/admin/configuracoes");
+  revalidatePath("/admin/viagens");
+  return { ok: true, id };
+}
+
+export async function updateBoardingPoint(data: {
+  id: string;
+  name: string;
+  city: string;
+  address: string;
+  observations: string;
+}) {
+  const session = await getSession();
+  if (!session || session.role !== "SUPER_ADMIN") {
+    return { error: "Sem permissão. Apenas o Super Admin pode gerenciar pontos de embarque." };
+  }
+
+  const name = data.name.trim();
+  const city = data.city.trim();
+  const address = data.address.trim();
+  const observations = data.observations.trim();
+
+  if (!data.id || !name || !city || !address) {
+    return { error: "Nome, cidade e endereço são obrigatórios." };
+  }
+
+  const now = new Date().toISOString();
+
+  await getRepositoryRuntime().transaction((store) => {
+    const point = store.boardingPoints.find((item) => item.id === data.id);
+    if (!point) throw new Error("Ponto de embarque não encontrado.");
+
+    const old = { ...point };
+
+    Object.assign(point, {
+      name,
+      city,
+      address,
+      observations,
+    });
+
+    store.auditLogs.push({
+      id: uuid(),
+      userId: session.id,
+      action: "UPDATE_BOARDING_POINT",
+      entity: "boarding_points",
+      entityId: point.id,
+      oldValue: old,
+      newValue: { ...point },
+      ip: null,
+      createdAt: now,
+    });
+  });
+
+  revalidatePath("/admin/configuracoes");
+  revalidatePath("/admin/viagens");
+  return { ok: true };
+}
+
+export async function setBoardingPointActive(id: string, active: boolean) {
+  const session = await getSession();
+  if (!session || session.role !== "SUPER_ADMIN") {
+    return { error: "Sem permissão. Apenas o Super Admin pode gerenciar pontos de embarque." };
+  }
+
+  if (!id) return { error: "Ponto de embarque inválido." };
+
+  const now = new Date().toISOString();
+
+  await getRepositoryRuntime().transaction((store) => {
+    const point = store.boardingPoints.find((item) => item.id === id);
+    if (!point) throw new Error("Ponto de embarque não encontrado.");
+
+    const old = { ...point };
+    point.active = active;
+
+    store.auditLogs.push({
+      id: uuid(),
+      userId: session.id,
+      action: active ? "ACTIVATE_BOARDING_POINT" : "DEACTIVATE_BOARDING_POINT",
+      entity: "boarding_points",
+      entityId: point.id,
+      oldValue: old,
+      newValue: { ...point },
+      ip: null,
+      createdAt: now,
+    });
+  });
+
+  revalidatePath("/admin/configuracoes");
+  revalidatePath("/admin/viagens");
+  return { ok: true };
+}
+
 export async function updateBrandSettings(partial: Partial<BrandSettings>) {
   const session = await getSession();
-  if (!session || !canAccess(session.role, "admin")) return { error: "Sem permissão." };
+  if (!session || session.role !== "SUPER_ADMIN")
+    return { error: "Sem permissão. Apenas o Super Admin pode alterar configurações." };
   await getRepositoryRuntime().transaction((store) => {
     const old = { ...store.brand };
     store.brand = { ...store.brand, ...partial };
@@ -376,6 +580,55 @@ export async function updateBrandSettings(partial: Partial<BrandSettings>) {
   });
   revalidatePath("/");
   revalidatePath("/admin/configuracoes");
+  return { ok: true };
+}
+
+export async function updatePaymentSettings(partial: Partial<PaymentSettings>) {
+  const session = await getSession();
+  if (!session || session.role !== "SUPER_ADMIN")
+    return { error: "Sem permissão. Apenas o Super Admin pode alterar configurações." };
+  await getRepositoryRuntime().transaction((store) => {
+    const old = { ...store.paymentSettings };
+    store.paymentSettings = { ...store.paymentSettings, ...partial };
+    store.auditLogs.push({
+      id: uuid(),
+      userId: session.id,
+      action: "UPDATE_PAYMENT_SETTINGS",
+      entity: "settings",
+      entityId: "payment",
+      oldValue: old,
+      newValue: store.paymentSettings,
+      ip: null,
+      createdAt: new Date().toISOString(),
+    });
+  });
+  revalidatePath("/admin/configuracoes");
+  revalidatePath("/checkout");
+  return { ok: true };
+}
+
+export async function updateVoucherSettings(partial: Partial<VoucherSettings>) {
+  const session = await getSession();
+  if (!session || session.role !== "SUPER_ADMIN")
+    return { error: "Sem permissão. Apenas o Super Admin pode alterar configurações." };
+  await getRepositoryRuntime().transaction((store) => {
+    const old = { ...store.voucher };
+    store.voucher = { ...store.voucher, ...partial };
+    store.auditLogs.push({
+      id: uuid(),
+      userId: session.id,
+      action: "UPDATE_VOUCHER_SETTINGS",
+      entity: "settings",
+      entityId: "voucher",
+      oldValue: old,
+      newValue: store.voucher,
+      ip: null,
+      createdAt: new Date().toISOString(),
+    });
+  });
+  revalidatePath("/admin/configuracoes");
+  revalidatePath("/voucher/[id]", "page");
+  revalidatePath("/minhas-viagens");
   return { ok: true };
 }
 
@@ -433,6 +686,7 @@ export async function upsertTrip(data: {
   date: string;
   departureTime: string;
   returnTime: string;
+  returnDate?: string;
   pricePerson: number;
   priceCouple: number;
   totalSeats: number;
@@ -498,6 +752,9 @@ export async function upsertTrip(data: {
         throw new Error(`Horário inválido para o ponto selecionado.`);
       }
 
+      const normalizedTime = item.time.trim().match(/^([01]\d|2[0-3]):[0-5]\d(?::[0-5]\d)?$/)?.[0].slice(0, 5) ?? item.time.trim();
+      item.time = normalizedTime;
+
       if (!/^([01]\d|2[0-3]):[0-5]\d$/.test(item.time)) {
         throw new Error(`Horário inválido para ${point.name}.`);
       }
@@ -507,6 +764,7 @@ export async function upsertTrip(data: {
       const trip = store.trips.find((t) => t.id === data.id);
       if (!trip) throw new Error("Viagem não encontrada.");
       const oldPrice = trip.pricePerson;
+      const oldStatus = trip.status;
       Object.assign(trip, {
         name: data.name,
         destination: data.destination,
@@ -514,6 +772,7 @@ export async function upsertTrip(data: {
         date: data.date,
         departureTime: data.departureTime,
         returnTime: data.returnTime,
+        returnDate: data.returnDate?.trim() ? data.returnDate : null,
         pricePerson: data.pricePerson,
         priceCouple: data.priceCouple,
         totalSeats: data.totalSeats,
@@ -541,14 +800,15 @@ export async function upsertTrip(data: {
         (item) => item.tripId !== trip.id,
       );
 
-      for (const item of selectedBoarding) {
+      selectedBoarding.forEach((item, index) => {
         store.tripBoardingPoints.push({
           id: uuid(),
           tripId: trip.id,
           boardingPointId: item.boardingPointId,
           time: item.time,
+          sortOrder: index,
         });
-      }
+      });
 
       store.auditLogs.push({
         id: uuid(),
@@ -556,8 +816,8 @@ export async function upsertTrip(data: {
         action: "UPDATE_TRIP",
         entity: "trips",
         entityId: trip.id,
-        oldValue: { pricePerson: oldPrice },
-        newValue: { pricePerson: trip.pricePerson },
+        oldValue: { pricePerson: oldPrice, status: oldStatus },
+        newValue: { pricePerson: trip.pricePerson, status: trip.status },
         ip: null,
         createdAt: now,
       });
@@ -572,6 +832,7 @@ export async function upsertTrip(data: {
         date: data.date,
         departureTime: data.departureTime,
         returnTime: data.returnTime,
+        returnDate: data.returnDate?.trim() ? data.returnDate : null,
         pricePerson: data.pricePerson,
         priceCouple: data.priceCouple,
         totalSeats: data.totalSeats,
@@ -583,9 +844,11 @@ export async function upsertTrip(data: {
         cancellationPolicy: data.cancellationPolicy,
         status: data.status,
         images:
-          data.imageUrls && data.imageUrls.length > 0
+          data.imageUrls !== undefined
             ? data.imageUrls
-            : [data.imageUrl || "/images/guaruja.png"],
+            : data.imageUrl
+              ? [data.imageUrl]
+              : [],
         createdAt: now,
         updatedAt: now,
       };
@@ -600,20 +863,76 @@ export async function upsertTrip(data: {
         });
       }
 
-      for (const item of selectedBoarding) {
+      selectedBoarding.forEach((item, index) => {
         store.tripBoardingPoints.push({
           id: uuid(),
           tripId: id,
           boardingPointId: item.boardingPointId,
           time: item.time,
+          sortOrder: index,
         });
-      }
+      });
     }
   });
   revalidatePath("/admin/viagens");
   revalidatePath("/excursoes");
   revalidatePath("/excursoes/[slug]", "page");
   revalidatePath("/");
+  return { ok: true };
+}
+
+export async function setTripStatusAction(
+  tripId: string,
+  status: "ARQUIVADA" | "PUBLICADA" | "RASCUNHO",
+) {
+  const session = await getSession();
+  if (!session || !canAccess(session.role, "admin")) {
+    return { error: "Sem permissão." };
+  }
+  if (!["ARQUIVADA", "PUBLICADA", "RASCUNHO"].includes(status)) {
+    return { error: "Status inválido." };
+  }
+
+  try {
+    await getRepositoryRuntime().transaction((store) => {
+      const trip = store.trips.find((t) => t.id === tripId);
+      if (!trip) throw new Error("Viagem não encontrada.");
+      if (trip.deletedAt) {
+        throw new Error("Viagem excluída não pode mudar de status.");
+      }
+      if (
+        status === "PUBLICADA" &&
+        !store.tripBoardingPoints.some((link) => link.tripId === trip.id)
+      ) {
+        throw new Error("Adicione ao menos um ponto de embarque antes de publicar.");
+      }
+
+      const now = new Date().toISOString();
+      const oldStatus = trip.status;
+      trip.status = status;
+      trip.updatedAt = now;
+
+      store.auditLogs.push({
+        id: uuid(),
+        userId: session.id,
+        action: status === "ARQUIVADA" ? "ARCHIVE_TRIP" : "PUBLISH_TRIP",
+        entity: "trips",
+        entityId: trip.id,
+        oldValue: { name: trip.name, status: oldStatus },
+        newValue: { name: trip.name, status: trip.status },
+        ip: null,
+        createdAt: now,
+      });
+    });
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Erro ao atualizar viagem." };
+  }
+
+  revalidatePath("/admin/viagens");
+  revalidatePath("/excursoes");
+  revalidatePath("/excursoes/[slug]", "page");
+  revalidatePath("/");
+  revalidatePath("/ofertas");
   return { ok: true };
 }
 
@@ -663,6 +982,7 @@ export async function createExpenseAction(formData: FormData): Promise<void> {
   const session = await getSession();
   if (!session || !canAccess(session.role, "financeiro")) return;
   await getRepositoryRuntime().transaction((store) => {
+    const now = new Date().toISOString();
     store.expenses.push({
       id: uuid(),
       category: String(formData.get("category")),
@@ -671,7 +991,21 @@ export async function createExpenseAction(formData: FormData): Promise<void> {
       description: String(formData.get("description")),
       tripId: String(formData.get("tripId") || "") || null,
       createdBy: session.id,
-      createdAt: new Date().toISOString(),
+      createdAt: now,
+    });
+    store.auditLogs.push({
+      id: uuid(),
+      userId: session.id,
+      action: "CREATE_EXPENSE",
+      entity: "expense",
+      entityId: store.expenses[store.expenses.length - 1].id,
+      oldValue: null,
+      newValue: {
+        category: String(formData.get("category")),
+        amount: Number(formData.get("amount")),
+      },
+      ip: null,
+      createdAt: now,
     });
   });
   revalidatePath("/financeiro");
@@ -684,7 +1018,26 @@ export async function deleteExpenseAction(formData: FormData): Promise<void> {
   const expenseId = String(formData.get("expenseId") || "");
   if (!expenseId) return;
   await getRepositoryRuntime().transaction((store) => {
+    const expense = store.expenses.find((e) => e.id === expenseId);
+    if (!expense) return;
+    const now = new Date().toISOString();
+    const oldValue = {
+      category: expense.category,
+      amount: expense.amount,
+      expenseDate: expense.expenseDate,
+    };
     store.expenses = store.expenses.filter((e) => e.id !== expenseId);
+    store.auditLogs.push({
+      id: uuid(),
+      userId: session.id,
+      action: "DELETE_EXPENSE",
+      entity: "expense",
+      entityId: expenseId,
+      oldValue,
+      newValue: null,
+      ip: null,
+      createdAt: now,
+    });
   });
   revalidatePath("/financeiro");
   revalidatePath("/admin/despesas");
@@ -706,32 +1059,389 @@ export async function updateExpenseAction(formData: FormData): Promise<void> {
   await getRepositoryRuntime().transaction((store) => {
     const expense = store.expenses.find((e) => e.id === expenseId);
     if (!expense) return;
+    const now = new Date().toISOString();
+    const oldValue = {
+      category: expense.category,
+      amount: expense.amount,
+      expenseDate: expense.expenseDate,
+    };
     expense.category = category;
     expense.amount = amount;
     expense.expenseDate = expenseDate;
     expense.description = description;
     expense.tripId = tripId;
+    store.auditLogs.push({
+      id: uuid(),
+      userId: session.id,
+      action: "UPDATE_EXPENSE",
+      entity: "expense",
+      entityId: expenseId,
+      oldValue,
+      newValue: { category, amount, expenseDate },
+      ip: null,
+      createdAt: now,
+    });
   });
   revalidatePath("/financeiro");
   revalidatePath("/admin/despesas");
 }
 
-export async function createCouponAction(formData: FormData): Promise<void> {
+export async function upsertCoupon(data: {
+  id?: string;
+  code: string;
+  type: "PERCENTUAL" | "FIXO";
+  value: number;
+  usageLimit?: number | null;
+  validUntil?: string | null;
+  validFrom?: string | null;
+  minAmount?: number | null;
+  perUserLimit?: number | null;
+  stackable?: boolean;
+  description?: string | null;
+  tripIds: string[];
+  active?: boolean;
+}) {
   const session = await getSession();
-  if (!session || !canAccess(session.role, "admin")) return;
-  await getRepositoryRuntime().transaction((store) => {
-    store.coupons.push({
-      id: uuid(),
-      code: String(formData.get("code")).toUpperCase(),
-      type: String(formData.get("type")) === "FIXO" ? "FIXO" : "PERCENTUAL",
-      value: Number(formData.get("value")),
-      usageLimit: Number(formData.get("usageLimit") || 0) || null,
-      validUntil: String(formData.get("validUntil") || "") || null,
-      tripIds: [],
-      active: true,
+  if (!session || !canAccess(session.role, "admin")) {
+    return { error: "Sem permissão." };
+  }
+
+  const code = data.code.trim().toUpperCase();
+  if (!code) return { error: "Informe o código do cupom." };
+  if (!(data.value >= 0)) return { error: "Valor do cupom inválido." };
+  if (data.type === "PERCENTUAL" && data.value > 100) {
+    return { error: "Percentual do cupom não pode passar de 100%." };
+  }
+  if (data.validFrom && data.validUntil && data.validFrom > data.validUntil) {
+    return { error: "A validade inicial não pode ser maior que a final." };
+  }
+
+  try {
+    await getRepositoryRuntime().transaction((store) => {
+      if (store.coupons.some((c) => c.code.toUpperCase() === code && c.id !== data.id)) {
+        throw new Error("Já existe um cupom com este código.");
+      }
+      const tripIds = data.tripIds.filter((id) =>
+        store.trips.some((t) => t.id === id && !t.deletedAt),
+      );
+      if (tripIds.length !== new Set(data.tripIds).size) {
+        throw new Error("Há viagens inválidas selecionadas para o cupom.");
+      }
+      const now = new Date().toISOString();
+
+      if (data.id) {
+        const coupon = store.coupons.find((c) => c.id === data.id);
+        if (!coupon) throw new Error("Cupom não encontrado.");
+        Object.assign(coupon, {
+          code,
+          type: data.type,
+          value: data.value,
+          usageLimit: data.usageLimit || null,
+          validUntil: data.validUntil || null,
+          validFrom: data.validFrom || null,
+          minAmount: data.minAmount || null,
+          perUserLimit: data.perUserLimit || null,
+          stackable: Boolean(data.stackable),
+          description: data.description?.trim() || null,
+          tripIds,
+          active: data.active !== undefined ? data.active : coupon.active,
+        });
+        store.auditLogs.push({
+          id: uuid(),
+          userId: session.id,
+          action: "UPDATE_COUPON",
+          entity: "coupons",
+          entityId: coupon.id,
+          oldValue: { code },
+          newValue: { code, type: data.type, value: data.value },
+          ip: null,
+          createdAt: now,
+        });
+      } else {
+        const id = uuid();
+        store.coupons.push({
+          id,
+          code,
+          type: data.type,
+          value: data.value,
+          usageLimit: data.usageLimit || null,
+          validUntil: data.validUntil || null,
+          validFrom: data.validFrom || null,
+          minAmount: data.minAmount || null,
+          perUserLimit: data.perUserLimit || null,
+          stackable: Boolean(data.stackable),
+          description: data.description?.trim() || null,
+          tripIds,
+          active: data.active ?? true,
+        });
+        store.auditLogs.push({
+          id: uuid(),
+          userId: session.id,
+          action: "CREATE_COUPON",
+          entity: "coupons",
+          entityId: id,
+          oldValue: null,
+          newValue: { code, type: data.type, value: data.value },
+          ip: null,
+          createdAt: now,
+        });
+      }
     });
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Erro ao salvar o cupom." };
+  }
+
+  revalidatePath("/admin/cupons");
+  revalidatePath("/ofertas");
+  revalidatePath("/");
+  return { ok: true };
+}
+
+export async function toggleCouponAction(couponId: string) {
+  const session = await getSession();
+  if (!session || !canAccess(session.role, "admin")) {
+    return { error: "Sem permissão." };
+  }
+  await getRepositoryRuntime().transaction((store) => {
+    const coupon = store.coupons.find((c) => c.id === couponId);
+    if (!coupon) throw new Error("Cupom não encontrado.");
+    coupon.active = !coupon.active;
   });
   revalidatePath("/admin/cupons");
+  return { ok: true };
+}
+
+export async function upsertPromotion(data: {
+  id?: string;
+  name: string;
+  description?: string;
+  active: boolean;
+  discountType: "PERCENTUAL" | "FIXO" | "PRECO";
+  discountValue: number;
+  promoPricePerson?: number | null;
+  promoPriceCouple?: number | null;
+  pixDiscountPercent?: number | null;
+  stackable: boolean;
+  couponId?: string | null;
+  allTrips: boolean;
+  tripIds: string[];
+  usageLimit?: number | null;
+  perUserLimit?: number | null;
+  startDate?: string | null;
+  endDate?: string | null;
+}) {
+  const session = await getSession();
+  if (!session || !canAccess(session.role, "admin")) {
+    return { error: "Sem permissão." };
+  }
+
+  const name = data.name.trim();
+  if (!name) return { error: "Informe o nome da promoção." };
+  if (!["PERCENTUAL", "FIXO", "PRECO"].includes(data.discountType)) {
+    return { error: "Tipo de desconto inválido." };
+  }
+  if (data.discountType === "PERCENTUAL" && data.discountValue > 100) {
+    return { error: "Percentual não pode passar de 100%." };
+  }
+  if (data.discountType === "PRECO" && !data.promoPricePerson && !data.promoPriceCouple) {
+    return { error: "Informe ao menos um preço promocional (pessoa ou dupla)." };
+  }
+  if (data.startDate && data.endDate && data.startDate > data.endDate) {
+    return { error: "A data inicial não pode ser maior que a final." };
+  }
+
+  try {
+    await getRepositoryRuntime().transaction((store) => {
+      const tripIds = data.allTrips
+        ? []
+        : data.tripIds.filter((id) => store.trips.some((t) => t.id === id && !t.deletedAt));
+      if (!data.allTrips && tripIds.length === 0) {
+        throw new Error("Selecione ao menos uma viagem ou marque 'todas as viagens'.");
+      }
+      if (!data.allTrips && tripIds.length !== new Set(data.tripIds).size) {
+        throw new Error("Há viagens inválidas selecionadas.");
+      }
+      if (data.couponId && !store.coupons.some((c) => c.id === data.couponId)) {
+        throw new Error("Cupom vinculado inexistente.");
+      }
+      const now = new Date().toISOString();
+
+      const payload = {
+        name,
+        description: data.description?.trim() || null,
+        active: data.active,
+        discountType: data.discountType,
+        discountValue: data.discountValue,
+        promoPricePerson: data.promoPricePerson || null,
+        promoPriceCouple: data.promoPriceCouple || null,
+        pixDiscountPercent: data.pixDiscountPercent != null ? data.pixDiscountPercent : null,
+        stackable: data.stackable,
+        couponId: data.couponId || null,
+        allTrips: data.allTrips,
+        usageLimit: data.usageLimit || null,
+        perUserLimit: data.perUserLimit || null,
+        startDate: data.startDate || null,
+        endDate: data.endDate || null,
+        tripIds,
+      };
+
+      if (data.id) {
+        const promotion = store.promotions.find((p) => p.id === data.id && !p.deletedAt);
+        if (!promotion) throw new Error("Promoção não encontrada.");
+        Object.assign(promotion, { ...payload, updatedAt: now });
+        store.auditLogs.push({
+          id: uuid(),
+          userId: session.id,
+          action: "UPDATE_PROMOTION",
+          entity: "promotions",
+          entityId: promotion.id,
+          oldValue: { name: promotion.name },
+          newValue: { name, discountType: data.discountType },
+          ip: null,
+          createdAt: now,
+        });
+      } else {
+        const id = uuid();
+        store.promotions.push({
+          id,
+          ...payload,
+          createdAt: now,
+          updatedAt: now,
+        });
+        store.auditLogs.push({
+          id: uuid(),
+          userId: session.id,
+          action: "CREATE_PROMOTION",
+          entity: "promotions",
+          entityId: id,
+          oldValue: null,
+          newValue: { name, discountType: data.discountType },
+          ip: null,
+          createdAt: now,
+        });
+      }
+    });
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Erro ao salvar a promoção." };
+  }
+
+  revalidatePath("/admin/promocoes");
+  revalidatePath("/ofertas");
+  revalidatePath("/");
+  revalidatePath("/excursoes/[slug]", "page");
+  return { ok: true };
+}
+
+export async function togglePromotionAction(promotionId: string) {
+  const session = await getSession();
+  if (!session || !canAccess(session.role, "admin")) {
+    return { error: "Sem permissão." };
+  }
+  await getRepositoryRuntime().transaction((store) => {
+    const promotion = store.promotions.find((p) => p.id === promotionId);
+    if (!promotion) throw new Error("Promoção não encontrada.");
+    promotion.active = !promotion.active;
+    promotion.updatedAt = new Date().toISOString();
+  });
+  revalidatePath("/admin/promocoes");
+  revalidatePath("/ofertas");
+  revalidatePath("/");
+  return { ok: true };
+}
+
+export async function duplicatePromotionAction(promotionId: string) {
+  const session = await getSession();
+  if (!session || !canAccess(session.role, "admin")) {
+    return { error: "Sem permissão." };
+  }
+  await getRepositoryRuntime().transaction((store) => {
+    const promotion = store.promotions.find((p) => p.id === promotionId);
+    if (!promotion) throw new Error("Promoção não encontrada.");
+    const now = new Date().toISOString();
+    const copy: Promotion = {
+      ...structuredClone(promotion),
+      id: uuid(),
+      name: `${promotion.name} (cópia)`,
+      active: false,
+      createdAt: now,
+      updatedAt: now,
+    };
+    store.promotions.push(copy);
+    store.auditLogs.push({
+      id: uuid(),
+      userId: session.id,
+      action: "DUPLICATE_PROMOTION",
+      entity: "promotions",
+      entityId: copy.id,
+      oldValue: null,
+      newValue: { from: promotion.id, name: copy.name },
+      ip: null,
+      createdAt: now,
+    });
+  });
+  revalidatePath("/admin/promocoes");
+  return { ok: true };
+}
+
+export async function deletePromotionAction(promotionId: string) {
+  const session = await getSession();
+  if (!session || !canAccess(session.role, "admin")) {
+    return { error: "Sem permissão." };
+  }
+  try {
+    await getRepositoryRuntime().transaction((store) => {
+      const promotion = store.promotions.find((p) => p.id === promotionId);
+      if (!promotion) throw new Error("Promoção não encontrada.");
+      // Soft delete: reservas antigas preservam a referência/auditoria.
+      const now = new Date().toISOString();
+      promotion.deletedAt = now;
+      promotion.active = false;
+      promotion.updatedAt = now;
+      store.auditLogs.push({
+        id: uuid(),
+        userId: session.id,
+        action: "DELETE_PROMOTION",
+        entity: "promotions",
+        entityId: promotion.id,
+        oldValue: { name: promotion.name },
+        newValue: { deletedAt: now },
+        ip: null,
+        createdAt: now,
+      });
+    });
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Erro ao excluir a promoção." };
+  }
+  revalidatePath("/admin/promocoes");
+  revalidatePath("/ofertas");
+  revalidatePath("/");
+  return { ok: true };
+}
+
+export async function updatePromoBannerAction(partial: Partial<PromoBannerSettings>) {
+  const session = await getSession();
+  if (!session || !canAccess(session.role, "admin")) {
+    return { error: "Sem permissão." };
+  }
+  await getRepositoryRuntime().transaction((store) => {
+    const old = { ...store.promoBanner };
+    store.promoBanner = { ...store.promoBanner, ...partial };
+    store.auditLogs.push({
+      id: uuid(),
+      userId: session.id,
+      action: "UPDATE_PROMO_BANNER",
+      entity: "settings",
+      entityId: "promo_banner",
+      oldValue: old,
+      newValue: store.promoBanner,
+      ip: null,
+      createdAt: new Date().toISOString(),
+    });
+  });
+  revalidatePath("/");
+  revalidatePath("/ofertas");
+  revalidatePath("/admin/promocoes");
+  return { ok: true };
 }
 
 export async function paySellerCommissionsAction(formData: FormData): Promise<void> {
@@ -791,13 +1501,16 @@ export async function getDashboardMetrics() {
   const fees = store.payments.reduce((s, p) => s + p.feeAmount, 0);
   return {
     revenue,
-    sales: store.bookings.length,
+    sales: store.bookings.filter((b) => b.status !== "CANCELADA").length,
     bookings: store.bookings.filter((b) => b.status === "CONFIRMADA").length,
     passengers: store.passengers.length,
     trips: store.trips.filter((t) => !t.deletedAt).length,
-    seats: store.trips
-      .filter((t) => !t.deletedAt)
-      .reduce((s, t) => s + t.totalSeats, 0) - store.passengers.length,
+    seats: Math.max(
+      0,
+      store.trips
+        .filter((t) => !t.deletedAt)
+        .reduce((s, t) => s + t.totalSeats, 0) - store.passengers.length,
+    ),
     pendingPayments: store.payments.filter((p) => p.status === "PENDENTE").length,
     commissions,
     pendingCommissions: store.commissions

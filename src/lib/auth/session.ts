@@ -4,6 +4,7 @@ import type { AppRole, SessionUser } from "@/types";
 import { getAuthSecret } from "@/lib/env/server";
 import { getAuthDriver } from "@/lib/supabase/config";
 import { getSupabaseSessionUser } from "./supabase-session";
+import { canAccessRole } from "@/lib/roles";
 
 const COOKIE = "prados_session";
 
@@ -72,12 +73,5 @@ export async function getSession(): Promise<SessionUser | null> {
 }
 
 export function canAccess(role: AppRole, area: "admin" | "financeiro" | "vendedor" | "operacional" | "customer") {
-  const map: Record<typeof area, AppRole[]> = {
-    admin: ["SUPER_ADMIN", "ADMIN"],
-    financeiro: ["SUPER_ADMIN", "ADMIN", "FINANCEIRO"],
-    vendedor: ["SUPER_ADMIN", "ADMIN", "VENDEDOR"],
-    operacional: ["SUPER_ADMIN", "ADMIN", "MONITOR"],
-    customer: ["SUPER_ADMIN", "ADMIN", "FINANCEIRO", "VENDEDOR", "MONITOR", "CLIENTE"],
-  };
-  return map[area].includes(role);
+  return canAccessRole(role, area);
 }

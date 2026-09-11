@@ -121,6 +121,7 @@ export async function createSeedStore(): Promise<DataStore> {
     {
       id: bp1,
       name: "SAN Fazendinha",
+      city: "Santana de Parnaíba",
       address: "Santana de Parnaíba - SP",
       latitude: -23.444,
       longitude: -46.918,
@@ -130,7 +131,8 @@ export async function createSeedStore(): Promise<DataStore> {
     {
       id: bp2,
       name: "Anhanguera Parque Shopping",
-      address: "São Paulo - SP",
+      city: "Cajamar",
+      address: "Cajamar - SP",
       latitude: -23.493,
       longitude: -46.761,
       observations: "Embarque na entrada principal",
@@ -139,6 +141,7 @@ export async function createSeedStore(): Promise<DataStore> {
     {
       id: bp3,
       name: "Ginásio de Esportes do Polvilho",
+      city: "Cajamar",
       address: "Cajamar - SP",
       latitude: -23.356,
       longitude: -46.876,
@@ -148,6 +151,7 @@ export async function createSeedStore(): Promise<DataStore> {
     {
       id: bp4,
       name: "Barra Funda",
+      city: "São Paulo",
       address: "São Paulo - SP",
       latitude: -23.525,
       longitude: -46.667,
@@ -166,6 +170,7 @@ export async function createSeedStore(): Promise<DataStore> {
       date: "2026-09-06",
       departureTime: "22:10",
       returnTime: "20:00",
+      returnDate: "2026-09-07",
       pricePerson: 180,
       priceCouple: 340,
       totalSeats: 46,
@@ -191,6 +196,7 @@ export async function createSeedStore(): Promise<DataStore> {
       date: "2026-09-20",
       departureTime: "05:00",
       returnTime: "19:30",
+      returnDate: "2026-09-20",
       pricePerson: 150,
       priceCouple: 280,
       totalSeats: 46,
@@ -214,6 +220,7 @@ export async function createSeedStore(): Promise<DataStore> {
       date: "2026-10-11",
       departureTime: "23:00",
       returnTime: "21:00",
+      returnDate: "2026-10-12",
       pricePerson: 220,
       priceCouple: 420,
       totalSeats: 40,
@@ -231,15 +238,15 @@ export async function createSeedStore(): Promise<DataStore> {
   ];
 
   const tripBoardingPoints = [
-    { id: uuid(), tripId: trip1, boardingPointId: bp1, time: "22:10" },
-    { id: uuid(), tripId: trip1, boardingPointId: bp2, time: "22:20" },
-    { id: uuid(), tripId: trip1, boardingPointId: bp3, time: "22:30" },
-    { id: uuid(), tripId: trip1, boardingPointId: bp4, time: "23:30" },
-    { id: uuid(), tripId: trip2, boardingPointId: bp1, time: "05:00" },
-    { id: uuid(), tripId: trip2, boardingPointId: bp2, time: "05:20" },
-    { id: uuid(), tripId: trip2, boardingPointId: bp3, time: "05:35" },
-    { id: uuid(), tripId: trip3, boardingPointId: bp2, time: "23:00" },
-    { id: uuid(), tripId: trip3, boardingPointId: bp4, time: "23:40" },
+    { id: uuid(), tripId: trip1, boardingPointId: bp1, time: "22:10", sortOrder: 0 },
+    { id: uuid(), tripId: trip1, boardingPointId: bp2, time: "22:20", sortOrder: 1 },
+    { id: uuid(), tripId: trip1, boardingPointId: bp3, time: "22:30", sortOrder: 2 },
+    { id: uuid(), tripId: trip1, boardingPointId: bp4, time: "23:30", sortOrder: 3 },
+    { id: uuid(), tripId: trip2, boardingPointId: bp1, time: "05:00", sortOrder: 0 },
+    { id: uuid(), tripId: trip2, boardingPointId: bp2, time: "05:20", sortOrder: 1 },
+    { id: uuid(), tripId: trip2, boardingPointId: bp3, time: "05:35", sortOrder: 2 },
+    { id: uuid(), tripId: trip3, boardingPointId: bp2, time: "23:00", sortOrder: 0 },
+    { id: uuid(), tripId: trip3, boardingPointId: bp4, time: "23:40", sortOrder: 1 },
   ];
 
   const seats: DataStore["seats"] = [];
@@ -405,15 +412,39 @@ export async function createSeedStore(): Promise<DataStore> {
       whatsapp: "5511998639502",
       instagram: "pradostour",
       email: "contato@pradostour.com",
+      phone: "11998639502",
+      whatsappMessage:
+        "Olá! Vim pelo site da Prado's Tour e gostaria de mais informações.",
       logoUrl: "/images/logo.png",
       bannerUrl: "/images/guaruja.png",
       faviconUrl: "/favicon.ico",
+      siteTagline:
+        "Reserve praias, parques e bate-voltas com conforto, cuidado e segurança.",
+      aboutText:
+        "Somos uma agência de turismo especializada em excursões bate-volta, praias, parques, day use, trilhas, cachoeiras, turismo religioso, eventos e viagens especiais. Cuidamos de cada detalhe para que você aproveite o passeio com tranquilidade.",
+      footerText:
+        "A Prado's Tour leva você para os melhores destinos com conforto, segurança e toda a organização que merece.",
     },
     paymentSettings: {
-      pixKey: "11998639502",
+      pixKey: "f8e32f48-9b97-41fa-aec0-db8ae91da403",
       pixTotalDiscount: 0.02,
       cardWhatsapp: true,
       defaultCommission: 0.1,
+    },
+    voucher: {
+      showQr: true,
+    },
+    promotions: [],
+    promotionUsages: [],
+    promoBanner: {
+      title: "Ofertas e promoções",
+      subtitle: "Condições especiais por tempo limitado",
+      description: "",
+      imageUrl: "",
+      buttonText: "Ver ofertas",
+      buttonLink: "/ofertas",
+      active: false,
+      sortOrder: 0,
     },
   };
 }

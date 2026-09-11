@@ -38,12 +38,21 @@ export default async function MyTripsPage() {
                   {formatDate(trip.date)} · {b.boardingPoint} · {formatCurrency(b.totalAmount)}
                 </p>
               </div>
-              <Link
-                href={`/voucher/${b.id}`}
-                className="text-sm font-semibold text-[var(--brand-primary)]"
-              >
-                Ver voucher
-              </Link>
+              {b.status === "CONFIRMADA" ? (
+                <Link
+                  href={`/voucher/${b.id}`}
+                  className="text-sm font-semibold text-[var(--brand-primary)]"
+                >
+                  Ver voucher
+                </Link>
+              ) : (
+                <Link
+                  href={`/checkout/sucesso?booking=${b.id}`}
+                  className="text-sm font-semibold text-[var(--brand-primary)]"
+                >
+                  Ver pagamento
+                </Link>
+              )}
             </div>
           );
         })}

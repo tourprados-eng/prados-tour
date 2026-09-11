@@ -14,9 +14,8 @@ export default async function AboutPage() {
           <p className="eyebrow">Nossa história</p>
           <h1 className="section-title mt-2">Sobre a {store.brand.companyName}</h1>
           <p className="mt-5 text-base leading-relaxed text-brand-ink/85 md:text-lg">
-            Somos uma agência especializada em excursões bate-volta, praias, parques, day
-            use, trilhas, cachoeiras, turismo religioso e viagens especiais — com operação
-            digital completa do catálogo ao check-in.
+            {store.brand.aboutText ||
+              "Somos uma agência especializada em excursões bate-volta, praias, parques, day use, trilhas, cachoeiras, turismo religioso e viagens especiais — com operação digital completa do catálogo ao check-in."}
           </p>
           <p className="mt-4 text-base leading-relaxed text-brand-muted">
             Nossa prioridade é que cada cliente saiba exatamente o que está comprando,

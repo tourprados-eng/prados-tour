@@ -2,19 +2,8 @@ import Link from "next/link";
 import { redirect } from "next/navigation";
 import { getSession, canAccess } from "@/lib/auth/session";
 import { logoutAction } from "@/lib/auth/actions";
+import { navItemsForRole } from "@/lib/navigation";
 import { Button } from "@/components/ui/button";
-
-const links = [
-  { href: "/admin", label: "Dashboard" },
-  { href: "/admin/reservas", label: "Reservas" },
-  { href: "/admin/viagens", label: "Viagens" },
-  { href: "/admin/clientes", label: "Clientes" },
-  { href: "/admin/vendedores", label: "Vendedores" },
-  { href: "/admin/cupons", label: "Cupons" },
-  { href: "/admin/despesas", label: "Despesas" },
-  { href: "/financeiro", label: "Financeiro" },
-  { href: "/admin/configuracoes", label: "Configurações" },
-];
 
 function resolveGreetingName(fullName: string): string {
   const first = fullName?.trim().split(/\s+/)[0] ?? "";
@@ -34,6 +23,7 @@ export default async function AdminLayout({
   }
 
   const greetingName = resolveGreetingName(session.fullName);
+  const navItems = navItemsForRole(session.role);
 
   return (
     <div className="min-h-screen bg-[#F7F4F5]">
@@ -55,15 +45,15 @@ export default async function AdminLayout({
             </div>
 
             <nav className="space-y-1">
-              {links.map((link) => (
-                <Link
-                  key={link.href}
-                  href={link.href}
-                  className="flex items-center rounded-xl px-4 py-3 text-sm font-semibold text-[#4A3941] transition hover:bg-[#FFF0F6] hover:text-[#E84C91]"
-                >
-                  {link.label}
-                </Link>
-              ))}
+              {navItems.map((item) => (
+                  <Link
+                    key={item.href}
+                    href={item.href}
+                    className="flex items-center rounded-xl px-4 py-3 text-sm font-semibold text-[#4A3941] transition hover:bg-[#FFF0F6] hover:text-[#E84C91]"
+                  >
+                    {item.label}
+                  </Link>
+                ))}
             </nav>
 
             <div className="mt-8 border-t border-[#E8DFE3] pt-5">

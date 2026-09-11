@@ -107,6 +107,8 @@ const COLLECTION_TABLE: Record<string, { table: string; conflictKey: string; del
   installments: { table: "payment_installments", conflictKey: "id", deleteColumn: "id" },
   coupons: { table: "coupons", conflictKey: "id", deleteColumn: "id" },
   couponUsages: { table: "coupon_usages", conflictKey: "id", deleteColumn: "id" },
+  promotions: { table: "promotions", conflictKey: "id", deleteColumn: "id" },
+  promotionUsages: { table: "promotion_usages", conflictKey: "id", deleteColumn: "id" },
   commissions: { table: "commissions", conflictKey: "id", deleteColumn: "id" },
   expenses: { table: "expenses", conflictKey: "id", deleteColumn: "id" },
   checkins: { table: "checkins", conflictKey: "id", deleteColumn: "id" },
@@ -126,16 +128,18 @@ const COLLECTION_KEYS = Object.keys(COLLECTION_TABLE);
  */
 const DELETE_ORDER = [
   "auditLogs", "notifications", "referrals", "loyaltyPoints", "reviews",
-  "expenses", "checkins", "couponUsages", "installments", "payments",
+  "expenses", "checkins", "couponUsages", "promotionUsages", "installments", "payments",
   "passengers", "seats", "commissions", "bookings", "sellers",
-  "tripBoardingPoints", "boardingPoints", "trips", "profiles",
+  "tripBoardingPoints", "boardingPoints", "trips", "promotions", "profiles",
 ];
 
 const UPSERT_ORDER = [...DELETE_ORDER].reverse();
 
-const SETTINGS_KEYS: { brand: { key: "brand" }; paymentSettings: { key: "payment" } } = {
+const SETTINGS_KEYS: { brand: { key: "brand" }; paymentSettings: { key: "payment" }; promoBanner: { key: "promo_banner" }; voucher: { key: "voucher" } } = {
   brand: { key: "brand" },
   paymentSettings: { key: "payment" },
+  promoBanner: { key: "promo_banner" },
+  voucher: { key: "voucher" },
 };
 
 const SETTINGS_KEY_NAMES = Object.values(SETTINGS_KEYS).map(({ key }) => key);
@@ -152,6 +156,14 @@ function emptyBrand(): Row {
     whatsapp: "",
     instagram: "",
     email: "",
+    phone: "",
+    whatsappMessage: "",
+    logoUrl: "",
+    bannerUrl: "",
+    faviconUrl: "",
+    siteTagline: "",
+    aboutText: "",
+    footerText: "",
   };
 }
 
@@ -164,11 +176,64 @@ function emptyPaymentSettings(): Row {
   };
 }
 
+function emptyPromoBanner(): Row {
+  return {
+    title: "Ofertas e promoções",
+    subtitle: "Condições especiais por tempo limitado",
+    description: "",
+    imageUrl: "",
+    buttonText: "Ver ofertas",
+    buttonLink: "/ofertas",
+    active: false,
+    sortOrder: 0,
+  };
+}
+
+function emptyVoucher(): Row {
+  return {
+    showQr: true,
+  };
+}
+
 /* ---------------------------------------------------------------------------
  * Repositório Supabase (service role, server-only).
  * ------------------------------------------------------------------------- */
 
 const BATCH_SIZE = 1000;
+
+type QueryResult<T> = { data: T | null; error: { message: string } | null };
+
+const RETRY_BASE_DELAY_MS = 300;
+const RETRY_ATTEMPTS = 5;
+
+/**
+ * O gateway do Supabase ocasionalmente devolve PGRST303 ("JWT issued at future")
+ * em requisições autenticadas por chave sb_secret_/sb_publishable_ — bug
+ * intermitente conhecido (clock skew interno gateway/PostgREST), não causado
+ * pelo cliente. Nesses casos a requisição é rejeitada antes de qualquer efeito
+ * no banco, então repeti-la com backoff é seguro e suficiente.
+ */
+async function withRetry<T>(
+  run: () => PromiseLike<QueryResult<T>>,
+): Promise<QueryResult<T>> {
+  let last: QueryResult<T> = { data: null, error: null };
+  for (let attempt = 0; attempt < RETRY_ATTEMPTS; attempt++) {
+    const result = await run();
+    if (!result.error) return result;
+    const message = result.error.message ?? "";
+    const retryable =
+      message.includes("JWT issued at future") || message.includes("PGRST303");
+    last = result;
+    if (retryable && attempt < RETRY_ATTEMPTS - 1) {
+      const backoff = RETRY_BASE_DELAY_MS * 2 ** attempt;
+      const jitter = Math.floor(Math.random() * RETRY_BASE_DELAY_MS);
+      await new Promise((resolve) => setTimeout(resolve, backoff + jitter));
+      continue;
+    }
+    return result;
+  }
+  return last;
+}
 
 export function createSupabaseStoreRepository(): StoreRepository {
   const { url, serviceRoleKey } = assertSupabaseServerConfiguration();
@@ -180,11 +245,14 @@ export function createSupabaseStoreRepository(): StoreRepository {
     },
   });
 
-  async function readSettings(): Promise<{ brand: Row; paymentSettings: Row }> {
-    const { data, error } = await supabase
-      .from("settings")
-      .select("key, value")
-      .in("key", SETTINGS_KEY_NAMES);
+  async function readSettings(): Promise<{ brand: Row; paymentSettings: Row; promoBanner: Row; voucher: Row }> {
+    const { data, error } = await withRetry(() =>
+      supabase
+        .from("settings")
+        .select("key, value")
+        .in("key", SETTINGS_KEY_NAMES)
+        .then((result) => result),
+    );
 
     if (error) throw new Error(`Falha ao ler settings: ${error.message}`);
 
@@ -196,6 +264,8 @@ export function createSupabaseStoreRepository(): StoreRepository {
     return {
       brand: found.brand ?? emptyBrand(),
       paymentSettings: found.paymentSettings ?? emptyPaymentSettings(),
+      promoBanner: found.promoBanner ?? emptyPromoBanner(),
+      voucher: found.voucher ?? emptyVoucher(),
     };
   }
 
@@ -203,7 +273,12 @@ export function createSupabaseStoreRepository(): StoreRepository {
     const config = COLLECTION_TABLE[collectionKey];
     if (!config) throw new Error(`Coleção desconhecida: ${collectionKey}`);
 
-    const { data, error } = await supabase.from(config.table).select("*");
+    const { data, error } = await withRetry(() =>
+      supabase
+        .from(config.table)
+        .select("*")
+        .then((result) => result),
+    );
     if (error) throw new Error(`Falha ao ler ${collectionKey}: ${error.message}`);
 
     const rows = (data ?? []).map((row) => rowToCamelCase(row as Row));
@@ -211,11 +286,14 @@ export function createSupabaseStoreRepository(): StoreRepository {
     // Interliga trip_images ao contracto do store (trip.images: string[]).
     if (collectionKey === "trips" && rows.length > 0) {
       const tripIds = rows.map((row) => row.id as string);
-      const { data: images, error: imagesError } = await supabase
-        .from("trip_images")
-        .select("trip_id, url, sort_order")
-        .in("trip_id", tripIds)
-        .order("sort_order", { ascending: true });
+      const { data: images, error: imagesError } = await withRetry(() =>
+        supabase
+          .from("trip_images")
+          .select("trip_id, url, sort_order")
+          .in("trip_id", tripIds)
+          .order("sort_order", { ascending: true })
+          .then((result) => result),
+      );
       if (imagesError) throw new Error(`Falha ao ler trip_images: ${imagesError.message}`);
 
       const byTrip: Record<string, string[]> = {};
@@ -230,10 +308,13 @@ export function createSupabaseStoreRepository(): StoreRepository {
     // Interliga coupon_trips ao contrato do store (coupon.tripIds: string[]).
     if (collectionKey === "coupons" && rows.length > 0) {
       const couponIds = rows.map((row) => row.id as string);
-      const { data: links, error: linksError } = await supabase
-        .from("coupon_trips")
-        .select("coupon_id, trip_id")
-        .in("coupon_id", couponIds);
+      const { data: links, error: linksError } = await withRetry(() =>
+        supabase
+          .from("coupon_trips")
+          .select("coupon_id, trip_id")
+          .in("coupon_id", couponIds)
+          .then((result) => result),
+      );
       if (linksError) throw new Error(`Falha ao ler coupon_trips: ${linksError.message}`);
 
       const byCoupon: Record<string, string[]> = {};
@@ -242,6 +323,27 @@ export function createSupabaseStoreRepository(): StoreRepository {
       }
       for (const row of rows) {
         row.tripIds = byCoupon[row.id as string] ?? [];
+      }
+    }
+
+    // Interliga promotion_trips ao contrato do store (promotion.tripIds: string[]).
+    if (collectionKey === "promotions" && rows.length > 0) {
+      const promotionIds = rows.map((row) => row.id as string);
+      const { data: links, error: linksError } = await withRetry(() =>
+        supabase
+          .from("promotion_trips")
+          .select("promotion_id, trip_id")
+          .in("promotion_id", promotionIds)
+          .then((result) => result),
+      );
+      if (linksError) throw new Error(`Falha ao ler promotion_trips: ${linksError.message}`);
+
+      const byPromotion: Record<string, string[]> = {};
+      for (const link of links ?? []) {
+        (byPromotion[link.promotion_id] ??= []).push(link.trip_id as string);
+      }
+      for (const row of rows) {
+        row.tripIds = byPromotion[row.id as string] ?? [];
       }
     }
 
@@ -334,6 +436,34 @@ export function createSupabaseStoreRepository(): StoreRepository {
     }
   }
 
+  /** Sincroniza promotion_trips a partir de promotion.tripIds (substituição completa). */
+  async function syncPromotionTrips(promotionRows: Row[]): Promise<void> {
+    const promotionIds = promotionRows.map((row) => row.id as string);
+    if (promotionIds.length === 0) return;
+
+    for (let i = 0; i < promotionIds.length; i += BATCH_SIZE) {
+      const batchIds = promotionIds.slice(i, i + BATCH_SIZE);
+      const { error: deleteError } = await supabase
+        .from("promotion_trips")
+        .delete()
+        .in("promotion_id", batchIds);
+      if (deleteError) throw new Error(`Falha ao remover promotion_trips: ${deleteError.message}`);
+
+      const desired: Row[] = [];
+      for (const promotion of promotionRows.filter((r) => batchIds.includes(r.id as string))) {
+        const tripIds = (promotion.tripIds as unknown as string[] | undefined) ?? [];
+        for (const tripId of tripIds) {
+          desired.push({ promotion_id: promotion.id, trip_id: tripId });
+        }
+      }
+
+      if (desired.length > 0) {
+        const { error } = await supabase.from("promotion_trips").insert(desired);
+        if (error) throw new Error(`Falha ao gravar promotion_trips: ${error.message}`);
+      }
+    }
+  }
+
   async function writeCollection(collectionKey: string, items: Row[]): Promise<void> {
     const config = COLLECTION_TABLE[collectionKey];
     if (!config) throw new Error(`Coleção desconhecida: ${collectionKey}`);
@@ -356,11 +486,15 @@ export function createSupabaseStoreRepository(): StoreRepository {
     if (collectionKey === "coupons") {
       await syncCouponTrips(items);
     }
+
+    if (collectionKey === "promotions") {
+      await syncPromotionTrips(items);
+    }
   }
 
   return {
     async read(): Promise<DataStore> {
-      const { brand, paymentSettings } = await readSettings();
+      const { brand, paymentSettings, promoBanner, voucher } = await readSettings();
 
       const chunks = await Promise.all(
         COLLECTION_KEYS.map((key) => readCollection(key).then((rows) => [key, rows] as const)),
@@ -369,6 +503,8 @@ export function createSupabaseStoreRepository(): StoreRepository {
       const store: Row = {
         brand,
         paymentSettings,
+        promoBanner,
+        voucher,
       };
       for (const [key, rows] of chunks) {
         store[key] = rows;
@@ -399,6 +535,26 @@ export function createSupabaseStoreRepository(): StoreRepository {
         settingsWrites.push({
           key: "payment",
           value: rowToSnakeCase(current.paymentSettings as unknown as Row),
+          updated_at: now,
+        } as SettingsRow);
+      }
+      if (!rowsEqual(
+        original.promoBanner as unknown as Row,
+        current.promoBanner as unknown as Row,
+      )) {
+        settingsWrites.push({
+          key: "promo_banner",
+          value: rowToSnakeCase(current.promoBanner as unknown as Row),
+          updated_at: now,
+        } as SettingsRow);
+      }
+      if (!rowsEqual(
+        original.voucher as unknown as Row,
+        current.voucher as unknown as Row,
+      )) {
+        settingsWrites.push({
+          key: "voucher",
+          value: rowToSnakeCase(current.voucher as unknown as Row),
           updated_at: now,
         } as SettingsRow);
       }

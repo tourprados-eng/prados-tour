@@ -31,7 +31,9 @@ npm run dev
 
 Abra [http://localhost:3000](http://localhost:3000).
 
-### Contas demo (senha `Prados@123`)
+### Contas demo
+
+**Modo store local** (`DATA_BACKEND=local`, seed em `.data/store.json`) — senha `Prados@123`:
 
 | E-mail | Papel |
 |--------|--------|
@@ -40,6 +42,14 @@ Abra [http://localhost:3000](http://localhost:3000).
 | monitor@pradostour.com | MONITOR |
 | financeiro@pradostour.com | FINANCEIRO |
 | cliente@pradostour.com | CLIENTE |
+
+**Modo Supabase** (`DATA_BACKEND=supabase`) — contas demo reais criadas via `node scripts/create-demo-accounts.mjs --apply` (senha `Prados@123`):
+
+| E-mail | Papel |
+|--------|--------|
+| demo.admin@pradostour.com | SUPER_ADMIN |
+| demo.vendedor@pradostour.com | VENDEDOR (código `VD99`) |
+| demo.cliente@pradostour.com | CLIENTE |
 
 ## Fluxos principais
 

@@ -1,10 +1,12 @@
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
+import { buildWhatsAppUrl } from "@/lib/contact";
 import { Button } from "@/components/ui/button";
 
 export const metadata = { title: "Contato" };
 
 export default async function ContactPage() {
   const store = await getRepositoryRuntime().read();
+  const { brand } = store;
 
   return (
     <div className="section-pad">
@@ -16,11 +18,15 @@ export default async function ContactPage() {
         </p>
 
         <div className="surface-card mt-10 space-y-5 p-6 md:p-8">
-          <Row label="WhatsApp" value={store.brand.whatsapp} />
-          <Row label="E-mail" value={store.brand.email} />
-          <Row label="Instagram" value={`@${store.brand.instagram}`} />
+          <Row label="WhatsApp" value={brand.whatsapp} />
+          {brand.phone ? <Row label="Telefone" value={brand.phone} /> : null}
+          <Row label="E-mail" value={brand.email} />
+          <Row label="Instagram" value={`@${brand.instagram}`} />
           <div className="flex flex-wrap gap-3 pt-2">
-            <Button href={`https://wa.me/${store.brand.whatsapp}`} size="lg">
+            <Button
+              href={buildWhatsAppUrl(brand.whatsapp, brand.whatsappMessage)}
+              size="lg"
+            >
               Chamar no WhatsApp
             </Button>
             <Button href="/excursoes" variant="outline" size="lg">

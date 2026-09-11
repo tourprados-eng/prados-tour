@@ -5,7 +5,9 @@ import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import { getSession } from "@/lib/auth/session";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { PixCopyButton } from "@/components/checkout/pix-copy-button";
 import { simulateGatewayConfirm } from "@/lib/booking/actions";
+import { buildWhatsAppUrl } from "@/lib/contact";
 
 export default async function CheckoutSuccessPage({
   searchParams,
@@ -73,20 +75,27 @@ export default async function CheckoutSuccessPage({
             <p className="mt-4 break-all rounded-2xl bg-black/5 p-3 text-left text-xs">
               {payment.pixCopyPaste}
             </p>
+            {payment.pixCopyPaste && (
+              <PixCopyButton value={payment.pixCopyPaste} />
+            )}
             <p className="mt-3 text-xs text-black/50">
-              Em produção, a confirmação chega via webhook do gateway. No demo, um admin pode
-              confirmar em Pagamentos.
+              Assim que o pagamento for confirmado, seu voucher ficará disponível
+              em Minhas viagens.
             </p>
           </div>
         )}
 
         {payment.method === "CARTAO" && payment.status === "PENDENTE" && (
           <div className="mt-8 rounded-2xl bg-pink-50 p-4 text-sm">
-            Cartão: o atendimento Prado&apos;s Tour finalizará pelo WhatsApp. O status só muda
-            após confirmação do gateway.
+            Cartão: o atendimento de{" "}
+            {store.brand.companyName || "Prado's Tour"} finalizará a cobrança
+            pelo WhatsApp. O status só muda após a confirmação do pagamento.
             <div className="mt-3">
               <Button
-                href={`https://wa.me/${store.brand.whatsapp}?text=Quero pagar a reserva ${booking.reference}`}
+                href={buildWhatsAppUrl(
+                  store.brand.whatsapp,
+                  `Quero pagar a reserva ${booking.reference}`,
+                )}
                 variant="secondary"
               >
                 Falar no WhatsApp
@@ -96,7 +105,9 @@ export default async function CheckoutSuccessPage({
         )}
 
         <div className="mt-8 flex flex-wrap gap-3">
-          <Button href={`/voucher/${booking.id}`}>Ver voucher</Button>
+          {booking.status === "CONFIRMADA" && (
+            <Button href={`/voucher/${booking.id}`}>Ver voucher</Button>
+          )}
           <Button href="/minhas-viagens" variant="outline">
             Minhas viagens
           </Button>
@@ -111,7 +122,7 @@ export default async function CheckoutSuccessPage({
             className="mt-6"
           >
             <Button type="submit" variant="ghost" size="sm">
-              [Demo admin] Simular webhook de pagamento
+              Confirmar pagamento recebido
             </Button>
           </form>
         )}

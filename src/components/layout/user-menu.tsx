@@ -14,6 +14,19 @@ const links = [
   { href: "/notificacoes", label: "Notificações", icon: Bell },
 ];
 
+const panelLabelForRole = (role: AppRole) => {
+  switch (role) {
+    case "FINANCEIRO":
+      return "Painel financeiro";
+    case "VENDEDOR":
+      return "Painel do vendedor";
+    case "MONITOR":
+      return "Painel operacional";
+    default:
+      return "Painel administrativo";
+  }
+};
+
 export function UserMenu({
   fullName,
   email,
@@ -97,7 +110,7 @@ export function UserMenu({
                 className="flex items-center gap-2.5 rounded-xl px-3 py-2 text-sm font-semibold text-brand-ink transition hover:bg-brand-tint hover:text-brand-primary"
               >
                 <Shield className="h-4 w-4 shrink-0 text-brand-primary" aria-hidden />
-                Painel administrativo
+                {panelLabelForRole(role)}
               </Link>
             )}
             {links.map((item) => (

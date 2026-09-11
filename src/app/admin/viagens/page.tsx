@@ -2,6 +2,7 @@ import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import TripForm from "@/components/admin/trip-form";
 import DeleteTripButton from "@/components/admin/delete-trip-button";
 import EditTripButton from "@/components/admin/edit-trip-button";
+import ArchiveTripButton from "@/components/admin/archive-trip-button";
 import { formatCurrency } from "@/lib/utils";
 
 const tripStatusLabels: Record<string, string> = {
@@ -10,6 +11,7 @@ const tripStatusLabels: Record<string, string> = {
   ESGOTADA: "Esgotada",
   CANCELADA: "Cancelada",
   FINALIZADA: "Finalizada",
+  ARQUIVADA: "Arquivada",
 };
 
 function tripStatusClass(status: string) {
@@ -19,6 +21,7 @@ function tripStatusClass(status: string) {
     ESGOTADA: "bg-amber-50 text-amber-700 ring-amber-200",
     CANCELADA: "bg-red-50 text-red-700 ring-red-200",
     FINALIZADA: "bg-blue-50 text-blue-700 ring-blue-200",
+    ARQUIVADA: "bg-violet-50 text-violet-700 ring-violet-200",
   };
 
   return classes[status] || "bg-gray-50 text-gray-700 ring-gray-200";
@@ -147,6 +150,11 @@ export default async function AdminTripsPage() {
                       <td className="px-6 py-5 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <EditTripButton tripId={trip.id} />
+                          <ArchiveTripButton
+                            tripId={trip.id}
+                            tripName={trip.name}
+                            archived={trip.status === "ARQUIVADA"}
+                          />
                           <DeleteTripButton tripId={trip.id} tripName={trip.name} />
                         </div>
                       </td>

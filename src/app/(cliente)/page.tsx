@@ -1,10 +1,10 @@
 import Image from "next/image";
-import Link from "next/link";
-import { ShieldCheck, Bus, Ticket, HeartHandshake, Star, MapPin, Check } from "lucide-react";
+import { ShieldCheck, Bus, Ticket, HeartHandshake, Star, Check } from "lucide-react";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { buildWhatsAppUrl } from "@/lib/contact";
 import { Button } from "@/components/ui/button";
 import { TripCard } from "@/components/trips/trip-card";
+import { OffersGrid } from "@/components/promotions/offers-grid";
 import { DEMO_PASSWORD_HINT } from "@/lib/constants";
 
 const benefits = [
@@ -26,7 +26,7 @@ const benefits = [
   {
     icon: HeartHandshake,
     title: "Atendimento próximo",
-    text: "Equipe Prado's Tour pronta para orientar antes, durante e depois da excursão.",
+    text: "Equipe pronta para orientar antes, durante e depois da excursão.",
   },
 ];
 
@@ -54,8 +54,8 @@ export default async function HomePage() {
   const store = await getRepositoryRuntime().read();
   const trips = store.trips.filter((t) => t.status === "PUBLICADA" && !t.deletedAt);
   const featured = trips.slice(0, 3);
-  const offers = trips.filter((t) => t.priceCouple).slice(0, 3);
   const brand = store.brand;
+  const banner = store.promoBanner;
   const gallery = [
     { src: "/images/guaruja.png", label: "Praias" },
     { src: "/images/paraty.png", label: "Cultura" },
@@ -68,7 +68,7 @@ export default async function HomePage() {
       <section className="relative min-h-[min(92vh,880px)] overflow-hidden bg-brand-deep">
         <Image
           src={brand.bannerUrl || "/images/guaruja.png"}
-          alt="Excursões Prado's Tour"
+          alt={`Excursões ${brand.companyName}`}
           fill
           priority
           sizes="100vw"
@@ -100,7 +100,8 @@ export default async function HomePage() {
             </h1>
 
             <p className="hero-enter-late mt-5 max-w-md text-base leading-relaxed text-white/90 sm:text-lg">
-              Reserve praias, parques e bate-voltas com pagamento fácil e voucher digital.
+              {brand.siteTagline ||
+                "Reserve praias, parques e bate-voltas com pagamento fácil e voucher digital."}
             </p>
 
             <p className="hero-enter-late mt-6 flex max-w-md items-center gap-3 font-display text-lg italic tracking-tight text-[#FFD9E8] sm:text-xl">
@@ -139,6 +140,43 @@ export default async function HomePage() {
         </div>
       </section>
 
+      {/* Banner de ofertas configurável */}
+      {banner.active && (
+        <section className="border-b border-brand-line bg-brand-tint">
+          <div className="container-page flex flex-col items-center gap-6 py-8 md:flex-row md:py-10">
+            <div className="min-w-0 flex-1 text-center md:text-left">
+              <p className="eyebrow justify-center md:justify-start">
+                {banner.subtitle || "Ofertas"}
+              </p>
+              <h2 className="mt-1 font-display text-2xl font-bold tracking-tight text-brand-ink md:text-3xl">
+                {banner.title}
+              </h2>
+              {banner.description && (
+                <p className="mt-2 max-w-2xl text-sm leading-relaxed text-brand-muted">
+                  {banner.description}
+                </p>
+              )}
+              {banner.buttonLink && banner.buttonText && (
+                <Button href={banner.buttonLink} className="mt-4">
+                  {banner.buttonText}
+                </Button>
+              )}
+            </div>
+            {banner.imageUrl && (
+              <div className="relative h-40 w-full max-w-sm overflow-hidden rounded-2xl shadow-card">
+                <Image
+                  src={banner.imageUrl}
+                  alt={banner.title || "Ofertas"}
+                  fill
+                  sizes="(max-width: 768px) 100vw, 400px"
+                  className="object-cover"
+                />
+              </div>
+            )}
+          </div>
+        </section>
+      )}
+
       {/* Próximas excursões */}
       <section className="section-pad">
         <div className="container-page">
@@ -171,7 +209,8 @@ export default async function HomePage() {
               <p className="eyebrow">Destaques</p>
               <h2 className="section-title mt-2">Ofertas em destaque</h2>
               <p className="section-lead">
-                Preço de dupla, cupom PRADOS10 e desconto especial no PIX à vista.
+                Descontos e preços especiais aplicados automaticamente na
+                reserva.
               </p>
             </div>
             <Button href="/ofertas" variant="soft">
@@ -179,36 +218,8 @@ export default async function HomePage() {
             </Button>
           </div>
 
-          <div className="mt-10 grid gap-4 md:grid-cols-3">
-            {offers.map((trip) => (
-              <Link
-                key={trip.id}
-                href={`/excursoes/${trip.slug}`}
-                className="surface-card group flex min-w-0 flex-col p-5 transition hover:-translate-y-1 hover:border-brand-primary/35 hover:shadow-lift"
-              >
-                <div className="flex items-start justify-between gap-3">
-                  <div className="min-w-0">
-                    <p className="text-xs font-bold uppercase tracking-wide text-brand-secondary">
-                      Oferta dupla
-                    </p>
-                    <h3 className="mt-1 truncate font-display text-xl font-bold text-brand-ink">
-                      {trip.name}
-                    </h3>
-                    <p className="mt-1 text-sm text-brand-muted">{formatDate(trip.date)}</p>
-                  </div>
-                  <MapPin className="h-5 w-5 shrink-0 text-brand-primary" aria-hidden />
-                </div>
-                <div className="mt-5 flex flex-wrap items-baseline gap-x-3 gap-y-1">
-                  <span className="text-sm text-brand-faint line-through">
-                    {formatCurrency(trip.pricePerson * 2)}
-                  </span>
-                  <span className="text-lg font-bold text-brand-primary">
-                    {formatCurrency(trip.priceCouple!)}
-                  </span>
-                  <span className="text-xs font-medium text-brand-muted">para 2 pessoas</span>
-                </div>
-              </Link>
-            ))}
+          <div className="mt-10">
+            <OffersGrid trips={trips} />
           </div>
         </div>
       </section>
@@ -218,7 +229,7 @@ export default async function HomePage() {
         <div className="container-page">
           <div className="mx-auto max-w-2xl text-center">
             <p className="eyebrow justify-center">Por que escolher</p>
-            <h2 className="section-title mt-2">Benefícios de viajar com a Prado&apos;s Tour</h2>
+            <h2 className="section-title mt-2">Benefícios de viajar com a {brand.companyName}</h2>
             <p className="section-lead mx-auto">
               Do primeiro clique ao check-in, tudo pensado para uma experiência tranquila.
             </p>
@@ -284,7 +295,8 @@ export default async function HomePage() {
             <p className="eyebrow">Experiências</p>
             <h2 className="section-title mt-2">Galeria de momentos</h2>
             <p className="section-lead">
-              Praias, centros históricos e dias especiais com a cara da Prado&apos;s Tour.
+              Praias, centros históricos e dias especiais com a cara de{" "}
+              {brand.companyName}.
             </p>
           </div>
 
@@ -319,7 +331,8 @@ export default async function HomePage() {
                 Pronto para a próxima saída?
               </h2>
               <p className="mt-3 text-base leading-relaxed text-white/90 md:text-lg">
-                Escolha o destino, reserve sua vaga e embarque com a Prado&apos;s Tour.
+                Escolha o destino, reserve sua vaga e embarque com{" "}
+                {brand.companyName}.
               </p>
               <div className="mt-8 flex flex-wrap gap-3">
                 <Button
@@ -331,7 +344,7 @@ export default async function HomePage() {
                   Reservar agora
                 </Button>
                 <Button
-                  href={`https://wa.me/${brand.whatsapp}`}
+                  href={buildWhatsAppUrl(brand.whatsapp, brand.whatsappMessage)}
                   size="lg"
                   className="border border-white/50 bg-transparent text-white hover:bg-white/10 focus-visible:ring-white"
                 >

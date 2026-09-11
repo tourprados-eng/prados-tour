@@ -8,6 +8,43 @@ const DATA_DIR = path.join(process.cwd(), ".data");
 const STORE_PATH = path.join(DATA_DIR, "store.json");
 const BACKUP_DIR = process.env.LOCAL_STORE_BACKUP_DIR?.trim();
 
+function normalizeStore(store: DataStore): DataStore {
+  store.promotions ??= [];
+  store.promotionUsages ??= [];
+  store.promoBanner ??= {
+    title: "Ofertas e promoções",
+    subtitle: "Condições especiais por tempo limitado",
+    description: "",
+    imageUrl: "",
+    buttonText: "Ver ofertas",
+    buttonLink: "/ofertas",
+    active: false,
+    sortOrder: 0,
+  };
+  store.brand ??= {
+    companyName: "Prado's Tour",
+    primary: "#E84C91",
+    secondary: "#F28C28",
+    background: "#FFF9FC",
+    font: "Arial",
+    fontSize: "16",
+    whatsapp: "",
+    instagram: "",
+    email: "",
+    logoUrl: "/images/logo.png",
+    bannerUrl: "/images/guaruja.png",
+    faviconUrl: "/favicon.ico",
+  };
+  store.paymentSettings ??= {
+    pixKey: "",
+    pixTotalDiscount: 0,
+    cardWhatsapp: false,
+    defaultCommission: 0.1,
+  };
+  store.voucher ??= { showQr: true };
+  return store;
+}
+
 let memoryStore: DataStore | null = null;
 let writeQueue: Promise<void> = Promise.resolve();
 
@@ -32,7 +69,7 @@ async function ensureStore(): Promise<DataStore> {
   await fs.mkdir(DATA_DIR, { recursive: true });
   try {
     const raw = await fs.readFile(STORE_PATH, "utf8");
-    memoryStore = JSON.parse(raw) as DataStore;
+    memoryStore = normalizeStore(JSON.parse(raw) as DataStore);
     return memoryStore;
   } catch {
     memoryStore = await createSeedStore();

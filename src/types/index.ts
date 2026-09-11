@@ -11,7 +11,8 @@ export type TripStatus =
   | "PUBLICADA"
   | "ESGOTADA"
   | "CANCELADA"
-  | "FINALIZADA";
+  | "FINALIZADA"
+  | "ARQUIVADA";
 
 export type BookingStatus = "PENDENTE" | "CONFIRMADA" | "CANCELADA" | "CONCLUIDA";
 export type PaymentStatus = "PENDENTE" | "PAGO" | "ESTORNADO" | "CANCELADO" | "ATRASADO";
@@ -21,7 +22,9 @@ export type InstallmentStatus = "PENDENTE" | "PAGO" | "ATRASADO" | "CANCELADO";
 export type CommissionStatus = "PENDENTE" | "APROVADA" | "PAGA" | "CANCELADA";
 export type CustomerClass = "NOVO" | "RECORRENTE" | "VIP" | "INATIVO";
 export type CouponType = "PERCENTUAL" | "FIXO";
+export type PromotionDiscountType = "PERCENTUAL" | "FIXO" | "PRECO";
 export type SeatState = "DISPONIVEL" | "SELECIONADO" | "OCUPADO" | "BLOQUEADO";
+export type ReviewStatus = "PENDENTE" | "APROVADO" | "REJEITADO";
 
 export interface Profile {
   id: string;
@@ -48,6 +51,7 @@ export interface Trip {
   date: string;
   departureTime: string | null;
   returnTime: string | null;
+  returnDate?: string | null;
   pricePerson: number;
   priceCouple: number | null;
   totalSeats: number;
@@ -69,6 +73,7 @@ export interface Trip {
 export interface BoardingPoint {
   id: string;
   name: string;
+  city: string;
   address: string;
   latitude: number | null;
   longitude: number | null;
@@ -81,6 +86,7 @@ export interface TripBoardingPoint {
   tripId: string;
   boardingPointId: string;
   time: string;
+  sortOrder: number;
 }
 
 export interface Seat {
@@ -113,6 +119,12 @@ export interface Booking {
   paymentPlan: PaymentPlan;
   status: BookingStatus;
   notes: string | null;
+  promotionId?: string | null;
+  promotionName?: string | null;
+  promotionDiscount?: number;
+  couponDiscount?: number;
+  pixDiscount?: number;
+  clientRequestId?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -166,6 +178,11 @@ export interface Coupon {
   value: number;
   usageLimit: number | null;
   validUntil: string | null;
+  validFrom?: string | null;
+  minAmount?: number | null;
+  perUserLimit?: number | null;
+  stackable?: boolean;
+  description?: string | null;
   tripIds: string[];
   active: boolean;
 }
@@ -173,6 +190,37 @@ export interface Coupon {
 export interface CouponUsage {
   id: string;
   couponId: string;
+  userId: string;
+  bookingId: string;
+  createdAt: string;
+}
+
+export interface Promotion {
+  id: string;
+  name: string;
+  description: string | null;
+  active: boolean;
+  discountType: PromotionDiscountType;
+  discountValue: number;
+  promoPricePerson: number | null;
+  promoPriceCouple: number | null;
+  pixDiscountPercent: number | null;
+  stackable: boolean;
+  couponId: string | null;
+  allTrips: boolean;
+  usageLimit: number | null;
+  perUserLimit: number | null;
+  startDate: string | null;
+  endDate: string | null;
+  deletedAt?: string | null;
+  createdAt: string;
+  updatedAt: string;
+  tripIds: string[];
+}
+
+export interface PromotionUsage {
+  id: string;
+  promotionId: string;
   userId: string;
   bookingId: string;
   createdAt: string;
@@ -223,6 +271,9 @@ export interface Review {
   tripId: string;
   rating: number;
   comment: string;
+  status: ReviewStatus;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
   createdAt: string;
 }
 
@@ -265,9 +316,14 @@ export interface BrandSettings {
   whatsapp: string;
   instagram: string;
   email: string;
+  phone?: string;
+  whatsappMessage?: string;
   logoUrl: string;
   bannerUrl: string;
   faviconUrl: string;
+  siteTagline?: string | null;
+  aboutText?: string | null;
+  footerText?: string | null;
 }
 
 export interface PaymentSettings {
@@ -275,6 +331,21 @@ export interface PaymentSettings {
   pixTotalDiscount: number;
   cardWhatsapp: boolean;
   defaultCommission: number;
+}
+
+export interface PromoBannerSettings {
+  title: string;
+  subtitle: string;
+  description: string;
+  imageUrl: string;
+  buttonText: string;
+  buttonLink: string;
+  active: boolean;
+  sortOrder: number;
+}
+
+export interface VoucherSettings {
+  showQr: boolean;
 }
 
 export interface SessionUser {
@@ -297,6 +368,8 @@ export interface DataStore {
   installments: PaymentInstallment[];
   coupons: Coupon[];
   couponUsages: CouponUsage[];
+  promotions: Promotion[];
+  promotionUsages: PromotionUsage[];
   commissions: Commission[];
   expenses: Expense[];
   checkins: Checkin[];
@@ -307,4 +380,6 @@ export interface DataStore {
   auditLogs: AuditLog[];
   brand: BrandSettings;
   paymentSettings: PaymentSettings;
+  promoBanner: PromoBannerSettings;
+  voucher: VoucherSettings;
 }

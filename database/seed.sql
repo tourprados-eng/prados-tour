@@ -3,11 +3,11 @@
 -- admin@pradostour.com | vendedor@pradostour.com | monitor@pradostour.com
 -- financeiro@pradostour.com | cliente@pradostour.com
 
-insert into public.boarding_points(name,address,observations) values
-('SAN Fazendinha','Santana de Parnaíba - SP','Ponto de referência'),
-('Anhanguera Shopping','São Paulo - SP','Ponto de referência'),
-('Ginásio de Esportes do Polvilho','Cajamar - SP','Ponto de referência'),
-('Barra Funda','São Paulo - SP','Tagipuru / região do Memorial da América Latina')
+insert into public.boarding_points(name,city,address,observations) values
+('SAN Fazendinha','Santana de Parnaíba','Santana de Parnaíba - SP','Ponto de referência'),
+('Anhanguera Parque Shopping','Cajamar','Cajamar - SP','Ponto de referência'),
+('Ginásio de Esportes do Polvilho','Cajamar','Cajamar - SP','Ponto de referência'),
+('Barra Funda','São Paulo','São Paulo - SP','Tagipuru / região do Memorial da América Latina')
 on conflict do nothing;
 
 insert into public.coupons(code,type,value,usage_limit,valid_until,active)

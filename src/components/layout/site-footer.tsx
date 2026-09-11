@@ -1,5 +1,6 @@
 import Image from "next/image";
 import Link from "next/link";
+import { buildWhatsAppUrl } from "@/lib/contact";
 import type { BrandSettings } from "@/types";
 
 const nav = [
@@ -39,8 +40,8 @@ export function SiteFooter({ brand }: { brand: BrandSettings }) {
               </div>
             </div>
             <p className="mt-4 max-w-sm text-sm leading-relaxed text-brand-muted">
-              Praias, parques, day use e viagens especiais com reserva online, pagamento
-              facilitado e voucher digital.
+              {brand.footerText ||
+                "Praias, parques, day use e viagens especiais com reserva online, pagamento facilitado e voucher digital."}
             </p>
           </div>
 
@@ -64,11 +65,12 @@ export function SiteFooter({ brand }: { brand: BrandSettings }) {
             <p className="text-sm font-bold tracking-tight text-brand-ink">Contato</p>
             <ul className="mt-3 space-y-2 text-sm text-brand-muted">
               <li className="break-all">WhatsApp: {brand.whatsapp}</li>
+              {brand.phone ? <li className="break-all">Telefone: {brand.phone}</li> : null}
               <li className="break-all">E-mail: {brand.email}</li>
               <li>Instagram: @{brand.instagram}</li>
             </ul>
             <Link
-              href={`https://wa.me/${brand.whatsapp}`}
+              href={buildWhatsAppUrl(brand.whatsapp, brand.whatsappMessage)}
               className="inline-flex items-center gap-1.5 rounded-full bg-brand-tint px-4 py-2 text-sm font-semibold text-brand-primary transition hover:bg-brand-grad hover:text-white hover:shadow-glow"
             >
               Falar no WhatsApp

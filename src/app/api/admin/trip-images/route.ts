@@ -8,6 +8,7 @@ import {
   getDataBackend,
   getSupabaseEnvironment,
 } from "@/lib/supabase/config";
+import { canAccessRole } from "@/lib/roles";
 
 const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
 const MAX_BYTES = 5 * 1024 * 1024;
@@ -21,7 +22,7 @@ function extensionFromType(type: string) {
 export async function POST(request: Request) {
   const session = await getSession();
 
-  if (!session || !["SUPER_ADMIN", "ADMIN"].includes(session.role)) {
+  if (!session || !canAccessRole(session.role, "admin")) {
     return NextResponse.json(
       { error: "Sem permissão." },
       { status: 403 },
