@@ -52,7 +52,7 @@ const trustItems = ["Pagamento seguro", "Voucher digital", "Vagas limitadas", "C
 
 export default async function HomePage() {
   const store = await getRepositoryRuntime().read();
-  const trips = store.trips.filter((t) => t.status === "PUBLICADA");
+  const trips = store.trips.filter((t) => t.status === "PUBLICADA" && !t.deletedAt);
   const featured = trips.slice(0, 3);
   const offers = trips.filter((t) => t.priceCouple).slice(0, 3);
   const brand = store.brand;

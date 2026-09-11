@@ -551,6 +551,48 @@ export async function upsertTrip(data: {
   return { ok: true };
 }
 
+export async function deleteTripAction(tripId: string) {
+  const session = await getSession();
+  if (!session || !canAccess(session.role, "admin")) {
+    return { error: "Sem permissão para excluir viagens." };
+  }
+
+  if (!tripId) return { error: "Viagem inválida." };
+
+  try {
+    await getRepositoryRuntime().transaction((store) => {
+      const trip = store.trips.find((t) => t.id === tripId);
+      if (!trip) throw new Error("Viagem não encontrada.");
+
+      const now = new Date().toISOString();
+
+      // Soft delete: preserva reservas, pagamentos, comissões e histórico.
+      trip.deletedAt = now;
+
+      store.auditLogs.push({
+        id: uuid(),
+        userId: session.id,
+        action: "DELETE_TRIP",
+        entity: "trips",
+        entityId: trip.id,
+        oldValue: { name: trip.name, status: trip.status },
+        newValue: { deletedAt: now },
+        ip: null,
+        createdAt: now,
+      });
+    });
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Erro ao excluir viagem." };
+  }
+
+  revalidatePath("/admin/viagens");
+  revalidatePath("/");
+  revalidatePath("/excursoes");
+  revalidatePath("/ofertas");
+  revalidatePath("/operacional");
+  return { ok: true };
+}
+
 export async function createExpenseAction(formData: FormData): Promise<void> {
   const session = await getSession();
   if (!session || !canAccess(session.role, "financeiro")) return;
@@ -686,8 +728,10 @@ export async function getDashboardMetrics() {
     sales: store.bookings.length,
     bookings: store.bookings.filter((b) => b.status === "CONFIRMADA").length,
     passengers: store.passengers.length,
-    trips: store.trips.length,
-    seats: store.trips.reduce((s, t) => s + t.totalSeats, 0) - store.passengers.length,
+    trips: store.trips.filter((t) => !t.deletedAt).length,
+    seats: store.trips
+      .filter((t) => !t.deletedAt)
+      .reduce((s, t) => s + t.totalSeats, 0) - store.passengers.length,
     pendingPayments: store.payments.filter((p) => p.status === "PENDENTE").length,
     commissions,
     pendingCommissions: store.commissions

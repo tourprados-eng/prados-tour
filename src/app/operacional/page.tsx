@@ -9,7 +9,7 @@ export default async function OperationalPage() {
   if (!session || !canAccess(session.role, "operacional")) redirect("/login");
   const store = await getRepositoryRuntime().read();
   const trips = store.trips
-    .filter((t) => t.status === "PUBLICADA" || t.status === "ESGOTADA")
+    .filter((t) => !t.deletedAt && (t.status === "PUBLICADA" || t.status === "ESGOTADA"))
     .sort((a, b) => a.date.localeCompare(b.date));
 
   return (

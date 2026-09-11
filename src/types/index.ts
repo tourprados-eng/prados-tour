@@ -59,6 +59,7 @@ export interface Trip {
   cancellationPolicy: string;
   status: TripStatus;
   images: string[];
+  deletedAt?: string | null;
   formUrl?: string;
   formRequired?: boolean;
   createdAt: string;

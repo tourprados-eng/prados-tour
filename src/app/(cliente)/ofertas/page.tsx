@@ -8,7 +8,7 @@ export const metadata = { title: "Ofertas" };
 
 export default async function OffersPage() {
   const store = await getRepositoryRuntime().read();
-  const trips = store.trips.filter((t) => t.status === "PUBLICADA" && t.priceCouple);
+  const trips = store.trips.filter((t) => t.status === "PUBLICADA" && t.priceCouple && !t.deletedAt);
 
   return (
     <div className="section-pad">

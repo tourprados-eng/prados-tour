@@ -37,7 +37,7 @@ export async function createBookingAction(input: CheckoutInput) {
   try {
     bookingId = await getRepositoryRuntime().transaction((store) => {
       const trip = store.trips.find((t) => t.id === input.tripId);
-      if (!trip || trip.status !== "PUBLICADA") {
+      if (!trip || trip.status !== "PUBLICADA" || trip.deletedAt) {
         throw new Error("Viagem indisponível.");
       }
       if (trip.date < new Date().toISOString().slice(0, 10)) {
@@ -460,13 +460,15 @@ export async function deleteBookingAction(bookingId: string) {
 
 export async function getPublicTrips() {
   const store = await getRepositoryRuntime().read();
-  return store.trips.filter((t) => t.status === "PUBLICADA");
+  return store.trips
+    .filter((t) => t.status === "PUBLICADA" && !t.deletedAt)
+    .sort((a, b) => a.date.localeCompare(b.date));
 }
 
 export async function getTripBySlug(slug: string) {
   const store = await getRepositoryRuntime().read();
   const trip = store.trips.find((t) => t.slug === slug);
-  if (!trip || trip.status !== "PUBLICADA") return null;
+  if (!trip || trip.status !== "PUBLICADA" || trip.deletedAt) return null;
   const boarding = store.tripBoardingPoints
     .filter((t) => t.tripId === trip.id)
     .map((t) => ({
