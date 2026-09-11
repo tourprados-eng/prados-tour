@@ -13,19 +13,104 @@ import {
   authenticateWithEmailPassword,
   requestSupabasePasswordReset,
   registerWithSupabase,
-  signInAfterRegister,
+  resendSupabaseSignupConfirmation,
 } from "@/lib/auth/supabase-actions";
 import { isValidCpf, onlyDigits } from "@/lib/utils";
 import type { AppRole } from "@/types";
 
+const blockedTestNames = new Set([
+  "teste",
+  "test",
+  "test user",
+  "demo",
+  "demo cliente",
+  "cliente",
+  "cliente teste",
+  "usuario",
+  "usuário",
+  "user",
+  "fake",
+  "falso",
+  "falsa",
+  "asdf",
+  "qwerty",
+]);
+
+function normalizeFullName(value: string) {
+  return value.trim().replace(/\s+/g, " ");
+}
+
+function isValidFullName(value: string) {
+  const name = normalizeFullName(value);
+  const normalized = name.toLocaleLowerCase("pt-BR");
+
+  if (blockedTestNames.has(normalized)) return false;
+
+  const parts = name.split(" ").filter(Boolean);
+  if (parts.length < 2) return false;
+
+  // Permite letras Unicode, acentos, hífen e apóstrofo.
+  // Não permite números, emojis ou símbolos arbitrários.
+  if (!/^[\p{L}\p{M}]+(?:[ '-][\p{L}\p{M}]+)+$/u.test(name)) {
+    return false;
+  }
+
+  return parts.every((part) => {
+    const letters = part.replace(/[^\p{L}\p{M}]/gu, "");
+    return letters.length >= 2;
+  });
+}
+
+function isValidBrazilianPhone(value: string) {
+  const digits = onlyDigits(value);
+
+  if (![10, 11].includes(digits.length)) return false;
+  if (/^(\d)\1+$/.test(digits)) return false;
+
+  return true;
+}
+
+function isValidBirthDate(value: string) {
+  const date = new Date(`${value}T00:00:00`);
+  if (Number.isNaN(date.getTime())) return false;
+
+  const [year, month, day] = value.split("-").map(Number);
+
+  if (!year || !month || !day) return false;
+  if (
+    date.getFullYear() !== year ||
+    date.getMonth() + 1 !== month ||
+    date.getDate() !== day
+  ) {
+    return false;
+  }
+
+  return date <= new Date();
+}
+
 const registerSchema = z
   .object({
-    fullName: z.string().min(3),
+    fullName: z
+      .string()
+      .transform(normalizeFullName)
+      .refine(isValidFullName, {
+        message: "Informe seu nome completo real, com nome e sobrenome.",
+      }),
     cpf: z.string().min(11),
-    birthDate: z.string().min(8),
-    email: z.string().email(),
-    phone: z.string().min(10),
-    whatsapp: z.string().min(10),
+    birthDate: z.string().min(8).refine(isValidBirthDate, {
+      message: "Informe uma data de nascimento válida.",
+    }),
+    email: z
+      .string()
+      .trim()
+      .toLowerCase()
+      .email("Informe um e-mail válido."),
+    phone: z.string().refine(isValidBrazilianPhone, {
+      message: "Informe um telefone válido.",
+    }),
+    whatsapp: z.string().refine(isValidBrazilianPhone, {
+      message: "Informe um WhatsApp válido.",
+    }),
     password: z.string().min(8),
     confirmPassword: z.string().min(8),
   })
@@ -33,7 +118,10 @@ const registerSchema = z
     message: "Senhas não conferem",
     path: ["confirmPassword"],
   })
-  .refine((d) => isValidCpf(d.cpf), { message: "CPF inválido", path: ["cpf"] });
+  .refine((d) => isValidCpf(d.cpf), {
+    message: "CPF inválido",
+    path: ["cpf"],
+  });
 
 export async function loginAction(formData: FormData): Promise<{ error: string } | void> {
   const email = String(formData.get("email") || "")
@@ -47,7 +135,7 @@ export async function loginAction(formData: FormData): Promise<{ error: string }
       return { error: "Autenticação não configurada. Entre em contato." };
     }
     if (result.status === "error") {
-      return { error: "E-mail ou senha inválidos." };
+      return { error: result.message };
     }
     const session = await getSession();
     if (!session) return { error: "E-mail ou senha inválidos." };
@@ -99,14 +187,10 @@ export async function registerAction(formData: FormData): Promise<{ error: strin
         whatsapp: onlyDigits(data.whatsapp),
         password: data.password,
       });
-      const signIn = await signInAfterRegister(email, data.password);
-      if (signIn.status === "error") {
-        return { error: "Conta criada. Faça login para continuar." };
-      }
     } catch (e) {
       return { error: e instanceof Error ? e.message : "Erro ao cadastrar." };
     }
-    redirect("/minhas-viagens");
+    redirect("/confirmar-email");
   }
 
   let userId = "";
@@ -188,6 +272,21 @@ export async function logoutAction() {
     await clearSession();
   }
   redirect("/");
+}
+
+export async function resendSignupConfirmationAction(formData: FormData) {
+  const email = String(formData.get("email") || "")
+    .trim()
+    .toLowerCase();
+
+  if (getAuthDriver() !== "supabase") {
+    return {
+      ok: false,
+      message: "Confirmação por e-mail está disponível apenas na autenticação Supabase.",
+    };
+  }
+
+  return resendSupabaseSignupConfirmation(email);
 }
 
 export async function requestPasswordResetAction(formData: FormData) {

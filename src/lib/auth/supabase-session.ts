@@ -61,6 +61,12 @@ export async function getSupabaseSessionUser(): Promise<SessionUser | null> {
   } = await supabase.auth.getUser();
   if (error || !user) return null;
 
+  // O usuário só pode ser considerado autenticado quando o e-mail
+  // realmente tiver sido confirmado pelo Supabase Auth.
+  if (!user.email_confirmed_at) {
+    return null;
+  }
+
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
     .select("id, full_name, email, role")

@@ -33,7 +33,22 @@ export async function authenticateWithEmailPassword(
   }
   const supabase = await createServerSupabaseClient();
   const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) return { status: "error", message: error.message };
+
+  if (error) {
+    if (
+      error.code === "email_not_confirmed" ||
+      error.message.toLowerCase().includes("email not confirmed")
+    ) {
+      return {
+        status: "error",
+        message:
+          "Seu e-mail ainda não foi confirmado. Verifique sua caixa de entrada e confirme o endereço antes de entrar.",
+      };
+    }
+
+    return { status: "error", message: error.message };
+  }
+
   return { status: "ok" };
 }
 
@@ -68,11 +83,13 @@ export type RegisterInput = {
 };
 
 /**
- * Cria uma conta real no Supabase Auth (service role, server-only).
+ * Cria uma conta real no Supabase Auth usando o fluxo público de signUp,
+ * permitindo que o Supabase envie a confirmação obrigatória por e-mail.
  * O trigger `handle_new_user` cria o profile a partir de `raw_user_meta_data`
  * (chaves: nome, cpf, nascimento, telefone, whatsapp) com role CLIENTE e
- * customer_class NOVO. Aqui apenas completamos referral_code e registros de
- * apoio (notificação + audit log). CPF/e-mail duplicados são rejeitados.
+ * customer_class NOVO. A service role é usada somente para verificações e
+ * atualizações administrativas posteriores. CPF/e-mail duplicados são
+ * rejeitados.
  */
 export async function registerWithSupabase(data: RegisterInput) {
   const { url, serviceRoleKey } = assertSupabaseServerConfiguration();
@@ -88,16 +105,21 @@ export async function registerWithSupabase(data: RegisterInput) {
     .maybeSingle();
   if (duplicate) throw new Error("CPF ou e-mail já cadastrado.");
 
-  const { data: responseData, error } = await admin.auth.admin.createUser({
+  const siteUrl = getPublicSiteUrl();
+  const supabase = await createServerSupabaseClient();
+
+  const { data: responseData, error } = await supabase.auth.signUp({
     email: data.email,
     password: data.password,
-    email_confirm: true,
-    user_metadata: {
-      nome: data.fullName.trim(),
-      cpf: data.cpf,
-      nascimento: data.birthDate,
-      telefone: data.phone,
-      whatsapp: data.whatsapp,
+    options: {
+      emailRedirectTo: siteUrl ? `${siteUrl}/auth/callback` : undefined,
+      data: {
+        nome: data.fullName.trim(),
+        cpf: data.cpf,
+        nascimento: data.birthDate,
+        telefone: data.phone,
+        whatsapp: data.whatsapp,
+      },
     },
   });
 
@@ -149,13 +171,54 @@ export async function registerWithSupabase(data: RegisterInput) {
   return created;
 }
 
+
 /**
- * Estabelece a sessão SSR (cookies sb-*) logo após o cadastro, dispensando um
- * segundo login manual.
+ * Reenvia o e-mail de confirmação de cadastro.
+ * Não cria sessão e não expõe informações sensíveis.
  */
-export async function signInAfterRegister(email: string, password: string) {
+export async function resendSupabaseSignupConfirmation(email: string) {
+  const normalizedEmail = email.trim().toLowerCase();
+
+  if (!normalizedEmail) {
+    return {
+      ok: false,
+      message: "Informe seu e-mail.",
+    };
+  }
+
+  if (!getSupabaseEnvironment().hasBrowserCredentials) {
+    return {
+      ok: false,
+      message: "Autenticação não configurada. Entre em contato.",
+    };
+  }
+
   const supabase = await createServerSupabaseClient();
-  const { error } = await supabase.auth.signInWithPassword({ email, password });
-  if (error) return { status: "error" as const, message: error.message };
-  return { status: "ok" as const };
+  const siteUrl = getPublicSiteUrl();
+
+  const { error } = await supabase.auth.resend({
+    type: "signup",
+    email: normalizedEmail,
+    options: {
+      emailRedirectTo: siteUrl ? `${siteUrl}/auth/callback` : undefined,
+    },
+  });
+
+  if (error) {
+    console.error(
+      "[resendSupabaseSignupConfirmation] falha ao reenviar confirmação:",
+      error,
+    );
+
+    return {
+      ok: false,
+      message: "Não foi possível reenviar agora. Tente novamente em alguns instantes.",
+    };
+  }
+
+  return {
+    ok: true,
+    message:
+      "Se o cadastro estiver aguardando confirmação, enviaremos um novo e-mail.",
+  };
 }
