@@ -350,7 +350,7 @@ export function CheckoutWizard({
             {passengers.map((p, idx) => {
               const fieldError = validatePassenger(p);
               const passengerType = p.birthDate
-                ? passengerCategory(p.birthDate, trip.date, trip.childMaxAge)
+                ? passengerCategory(p.birthDate, trip.date)
                 : null;
               return (
                 <div key={idx} className="grid gap-3 sm:grid-cols-2">

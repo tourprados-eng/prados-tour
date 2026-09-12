@@ -34,10 +34,9 @@ export function ageAtDate(birthDate: string, tripDate: string): number {
 export function passengerCategory(
   birthDate: string | null | undefined,
   tripDate: string,
-  childMaxAge: number | null,
 ): "ADULTO" | "CRIANCA" {
-  if (!childMaxAge || childMaxAge <= 0 || !birthDate) return "ADULTO";
-  return ageAtDate(birthDate, tripDate) <= childMaxAge ? "CRIANCA" : "ADULTO";
+  if (!birthDate) return "ADULTO";
+  return ageAtDate(birthDate, tripDate) < 12 ? "CRIANCA" : "ADULTO";
 }
 
 /** Preços efetivos (pessoa/dupla) considerando uma promoção de preço/dupla. */
@@ -76,13 +75,39 @@ function tripsTicket(
 ): { adultCount: number; childCount: number; base: number } {
   const { personPrice, couplePrice } = effectiveTripPrices(trip, promotion);
   if (passengers && passengers.length > 0) {
-    const childCount = passengers.filter(
-      (p) => passengerCategory(p.birthDate, trip.date, trip.childMaxAge) === "CRIANCA",
+    const adultCount = passengers.filter(
+      (p) => passengerCategory(p.birthDate, trip.date) === "ADULTO",
     ).length;
-    const adultCount = passengers.length - childCount;
+    const childPassengers = passengers.filter(
+      (p) => passengerCategory(p.birthDate, trip.date) === "CRIANCA",
+    );
+    const childCount = childPassengers.length;
     const adultBase = calculateTripPrice(adultCount, personPrice, couplePrice);
-    const childPrice = trip.childPrice ?? personPrice;
-    return { adultCount, childCount, base: round2(adultBase + childCount * childPrice) };
+    const childPrice = trip.childPrice ?? 0;
+
+    const childBase = childPassengers.reduce((total, passenger) => {
+      const age = passenger.birthDate ? ageAtDate(passenger.birthDate, trip.date) : 12;
+      if (
+        age < 5 &&
+        trip.childUnder5FreeWithTwoAdults &&
+        adultCount >= 2
+      ) {
+        return total;
+      }
+
+      const effectiveChildPrice =
+        age < 5 && trip.childUnder5FreeWithTwoAdults && adultCount === 1
+          ? childPrice / 2
+          : childPrice;
+
+      return total + effectiveChildPrice;
+    }, 0);
+
+    return {
+      adultCount,
+      childCount,
+      base: round2(adultBase + childBase),
+    };
   }
   return { adultCount: quantity, childCount: 0, base: calculateTripPrice(quantity, personPrice, couplePrice) };
 }

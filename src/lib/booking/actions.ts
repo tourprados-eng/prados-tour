@@ -9,7 +9,7 @@ import { getSession, canAccess } from "@/lib/auth/session";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import { isValidCpf, onlyDigits } from "@/lib/utils";
 import { canAccessRole } from "@/lib/roles";
-import { computeBookingPrice, passengerCategory } from "@/lib/pricing";
+import { ageAtDate, computeBookingPrice, passengerCategory } from "@/lib/pricing";
 import type { DataStore, Payment, PaymentMethod, PaymentPlan, Trip } from "@/types";
 import {
   createAsaasPixPayment,
@@ -771,14 +771,34 @@ function passengerPricesForBooking(
 
   const adults = passengers.filter(
     (p) =>
-      passengerCategory(p.birthDate, trip.date, trip.childMaxAge) === "ADULTO",
+      passengerCategory(p.birthDate, trip.date) === "ADULTO",
   ).length;
 
   let adultIndex = 0;
   return passengers.map((p) => {
     const isChild =
-      passengerCategory(p.birthDate, trip.date, trip.childMaxAge) === "CRIANCA";
+      passengerCategory(p.birthDate, trip.date) === "CRIANCA";
     if (isChild) {
+      const age = p.birthDate ? ageAtDate(p.birthDate, trip.date) : 12;
+      if (
+        age < 5 &&
+        trip.childUnder5FreeWithTwoAdults &&
+        adults >= 2
+      ) {
+        return { price: 0, category: "CRIANCA" as const };
+      }
+
+      if (
+        age < 5 &&
+        trip.childUnder5FreeWithTwoAdults &&
+        adults === 1
+      ) {
+        return {
+          price: Math.round((childPrice / 2) * 100) / 100,
+          category: "CRIANCA" as const,
+        };
+      }
+
       return { price: childPrice, category: "CRIANCA" as const };
     }
     const isOddSingle = adults % 2 === 1 && adultIndex === adults - 1;

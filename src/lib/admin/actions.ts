@@ -712,6 +712,7 @@ export async function upsertTrip(data: {
   priceCouple: number;
   childPrice?: number | null;
   childMaxAge?: number | null;
+  childUnder5FreeWithTwoAdults?: boolean;
   insuranceEnabled?: boolean;
   insurancePrice?: number;
   transportPolicy?: string;
@@ -806,8 +807,9 @@ export async function upsertTrip(data: {
         returnDate: data.returnDate?.trim() ? data.returnDate : null,
         pricePerson: data.pricePerson,
         priceCouple: data.priceCouple,
-        childPrice: data.childPrice ?? null,
-        childMaxAge: data.childMaxAge ?? null,
+        childPrice: data.childPrice ?? 0,
+        childMaxAge: 11,
+        childUnder5FreeWithTwoAdults: data.childUnder5FreeWithTwoAdults ?? false,
         insuranceEnabled: data.insuranceEnabled ?? false,
         insurancePrice: data.insurancePrice ?? 20,
         transportPolicy: data.transportPolicy?.trim() || null,
@@ -872,8 +874,9 @@ export async function upsertTrip(data: {
         returnDate: data.returnDate?.trim() ? data.returnDate : null,
         pricePerson: data.pricePerson,
         priceCouple: data.priceCouple,
-        childPrice: data.childPrice ?? null,
-        childMaxAge: data.childMaxAge ?? null,
+        childPrice: data.childPrice ?? 0,
+        childMaxAge: 11,
+        childUnder5FreeWithTwoAdults: data.childUnder5FreeWithTwoAdults ?? false,
         insuranceEnabled: data.insuranceEnabled ?? false,
         insurancePrice: data.insurancePrice ?? 20,
         transportPolicy: data.transportPolicy?.trim() || null,

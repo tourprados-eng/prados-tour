@@ -57,6 +57,7 @@ export interface Trip {
   priceCouple: number | null;
   childPrice: number | null;
   childMaxAge: number | null;
+  childUnder5FreeWithTwoAdults?: boolean;
   insuranceEnabled: boolean;
   insurancePrice: number;
   transportPolicy: string | null;

@@ -58,8 +58,8 @@ export default function TripForm({
   const [featured, setFeatured] = useState(true);
   const [formUrl, setFormUrl] = useState(trip?.formUrl ?? "");
   const [formRequired, setFormRequired] = useState(trip?.formRequired ?? true);
-  const [childPricingEnabled, setChildPricingEnabled] = useState(
-    Boolean(trip?.childMaxAge && trip?.childMaxAge > 0 && trip?.childPrice != null),
+  const [childUnder5FreeWithTwoAdults, setChildUnder5FreeWithTwoAdults] = useState(
+    trip?.childUnder5FreeWithTwoAdults ?? false,
   );
   const [insuranceEnabled, setInsuranceEnabled] = useState(
     trip?.insuranceEnabled ?? false,
@@ -174,10 +174,6 @@ export default function TripForm({
 
     formData.set("featured", featured ? "true" : "false");
 
-    if (!childPricingEnabled) {
-      formData.set("childPrice", "");
-      formData.set("childMaxAge", "");
-    }
     formData.set("insuranceEnabled", insuranceEnabled ? "true" : "false");
 
     /*
@@ -238,12 +234,9 @@ export default function TripForm({
       returnDate: returnDate || undefined,
       pricePerson: Number(formData.get("pricePerson")),
       priceCouple: Number(formData.get("priceCouple") || 0),
-      childPrice: Number(formData.get("childPrice") || 0) > 0
-        ? Number(formData.get("childPrice"))
-        : null,
-      childMaxAge: Number(formData.get("childMaxAge") || 0) > 0
-        ? Number(formData.get("childMaxAge"))
-        : null,
+      childPrice: Math.max(0, Number(formData.get("childPrice") || 0)),
+      childMaxAge: 11,
+      childUnder5FreeWithTwoAdults,
       insuranceEnabled: insuranceEnabled,
       insurancePrice: Number(formData.get("insurancePrice") || 20),
       transportPolicy: String(formData.get("transportPolicy")),
@@ -467,57 +460,49 @@ export default function TripForm({
               </div>
 
               <div className="md:col-span-2">
-                <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-[#eee5e9] bg-[#fffafc] p-4">
-                  <input
-                    type="checkbox"
-                    checked={childPricingEnabled}
-                    onChange={(e) => setChildPricingEnabled(e.target.checked)}
-                    className="h-5 w-5 accent-[#ec3f88]"
-                  />
-                  <div>
-                    <p className="text-sm font-semibold text-[#302229]">
-                      Preço especial para crianças
-                    </p>
-                    <p className="mt-1 text-xs text-[#77666e]">
-                      Define um preço e uma idade-limite para crianças nesta viagem.
-                    </p>
-                  </div>
-                </label>
+                <div className="rounded-2xl border border-[#f2dce5] bg-[#fff8fb] p-4">
+                  <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#f28c28]">
+                    Política de crianças
+                  </p>
 
-                {childPricingEnabled && (
-                  <div className="mt-3 grid gap-4 md:grid-cols-2">
-                    <div>
-                      <label className="mb-2 block text-sm font-semibold text-[#302229]">
-                        Preço da criança (R$) *
-                      </label>
-                      <input
-                        name="childPrice"
-                        type="number"
-                        step="0.01"
-                        min="0"
-                        required
-                        defaultValue={trip?.childPrice ?? ""}
-                        placeholder="120,00"
-                        className="h-12 w-full rounded-xl border border-[#ddd2d8] px-4 text-sm outline-none focus:border-[#ec3f88]"
-                      />
-                    </div>
-                    <div>
-                      <label className="mb-2 block text-sm font-semibold text-[#302229]">
-                        Idade máxima da criança (anos) *
-                      </label>
-                      <input
-                        name="childMaxAge"
-                        type="number"
-                        min="0"
-                        max="17"
-                        required
-                        defaultValue={trip?.childMaxAge ?? ""}
-                        placeholder="10"
-                        className="h-12 w-full rounded-xl border border-[#ddd2d8] px-4 text-sm outline-none focus:border-[#ec3f88]"
-                      />
-                    </div>
+                  <div className="mt-3">
+                    <label className="mb-2 block text-sm font-semibold text-[#302229]">
+                      Preço da criança (R$)
+                    </label>
+                    <input
+                      name="childPrice"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      required
+                      defaultValue={trip?.childPrice ?? 0}
+                      placeholder="0,00"
+                      className="h-12 w-full rounded-xl border border-[#ddd2d8] px-4 text-sm outline-none focus:border-[#ec3f88]"
+                    />
+                    <p className="mt-1 text-xs text-[#77666e]">
+                      Defina livremente o valor infantil desta viagem. R$ 0,00 é válido.
+                    </p>
                   </div>
-                )}
+
+                  <label className="mt-4 flex cursor-pointer items-start gap-3 rounded-xl border border-[#eee5e9] bg-white p-4">
+                    <input
+                      type="checkbox"
+                      checked={childUnder5FreeWithTwoAdults}
+                      onChange={(e) => setChildUnder5FreeWithTwoAdults(e.target.checked)}
+                      className="mt-0.5 h-5 w-5 accent-[#ec3f88]"
+                    />
+                    <div>
+                      <p className="text-sm font-semibold text-[#302229]">
+                        Menor de 5 anos viaja grátis com 2 adultos pagantes
+                      </p>
+                      <p className="mt-1 text-xs text-[#77666e]">
+                        Quando ativada, a criança com menos de 5 anos viaja gratuitamente
+                        acompanhada de 2 adultos pagantes e viajando no colo.
+                        Com apenas 1 adulto pagante, será cobrado 50% do preço infantil.
+                      </p>
+                    </div>
+                  </label>
+                </div>
               </div>
 
               <div className="md:col-span-2">
