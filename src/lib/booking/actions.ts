@@ -521,9 +521,17 @@ export async function createBookingAction(input: CheckoutInput) {
     return { bookingId, reference };
   }
 
+  console.log("[BOOKING] Iniciando geração do PIX");
+
   const pix = await ensureAsaasPixPayment(bookingId, paymentId, {
     responsibleEmail: input.responsibleEmail,
   });
+
+  console.log("[BOOKING] Geração do PIX retornou:", {
+    ok: pix.ok,
+    hasMessage: Boolean(pix.message),
+  });
+
   revalidatePath("/minhas-viagens");
 
   if (pix.ok) {
