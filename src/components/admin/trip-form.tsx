@@ -235,7 +235,7 @@ export default function TripForm({
       pricePerson: Number(formData.get("pricePerson")),
       priceCouple: Number(formData.get("priceCouple") || 0),
       childPrice: Math.max(0, Number(formData.get("childPrice") || 0)),
-      childMaxAge: 11,
+      childMaxAge: 5,
       childUnder5FreeWithTwoAdults,
       insuranceEnabled: insuranceEnabled,
       insurancePrice: Number(formData.get("insurancePrice") || 20),

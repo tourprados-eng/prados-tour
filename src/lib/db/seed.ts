@@ -175,7 +175,7 @@ export async function createSeedStore(): Promise<DataStore> {
       pricePerson: 180,
       priceCouple: 340,
       childPrice: 120,
-      childMaxAge: 10,
+      childMaxAge: 5,
       insuranceEnabled: true,
       insurancePrice: 20,
       transportPolicy:

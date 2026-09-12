@@ -29,14 +29,14 @@ export function ageAtDate(birthDate: string, tripDate: string): number {
 
 /**
  * Categoria de preço do passageiro a partir da data de nascimento: criança
- * apenas quando a viagem define childMaxAge E o passageiro tem idade <= limite.
+ * Considera criança quem tem de 0 a 5 anos na data da viagem.
  */
 export function passengerCategory(
   birthDate: string | null | undefined,
   tripDate: string,
 ): "ADULTO" | "CRIANCA" {
   if (!birthDate) return "ADULTO";
-  return ageAtDate(birthDate, tripDate) < 12 ? "CRIANCA" : "ADULTO";
+  return ageAtDate(birthDate, tripDate) <= 5 ? "CRIANCA" : "ADULTO";
 }
 
 /** Preços efetivos (pessoa/dupla) considerando uma promoção de preço/dupla. */
@@ -88,7 +88,7 @@ function tripsTicket(
     const childBase = childPassengers.reduce((total, passenger) => {
       const age = passenger.birthDate ? ageAtDate(passenger.birthDate, trip.date) : 12;
       if (
-        age < 5 &&
+        age <= 5 &&
         trip.childUnder5FreeWithTwoAdults &&
         adultCount >= 2
       ) {
@@ -96,7 +96,7 @@ function tripsTicket(
       }
 
       const effectiveChildPrice =
-        age < 5 && trip.childUnder5FreeWithTwoAdults && adultCount === 1
+        age <= 5 && trip.childUnder5FreeWithTwoAdults && adultCount === 1
           ? childPrice / 2
           : childPrice;
 

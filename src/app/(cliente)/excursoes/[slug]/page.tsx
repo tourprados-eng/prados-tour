@@ -112,13 +112,9 @@ export default async function TripDetailPage({
               <p className="mt-1 text-sm text-brand-muted">
                 Dupla: {formatCurrency(promo ? promo.couplePrice : trip.priceCouple ?? trip.pricePerson * 2)}
               </p>
-              {trip.childMaxAge != null && trip.childPrice != null && (
+              {trip.childPrice != null && (
                 <p className="mt-1 text-sm text-brand-muted">
-                  Criança{" "}
-                  {trip.childMaxAge === 0
-                    ? ""
-                    : `(até ${trip.childMaxAge} ano${trip.childMaxAge === 1 ? "" : "s"})`}
-                  : {formatCurrency(trip.childPrice)}
+                  Criança (0 a 5 anos): {formatCurrency(trip.childPrice)}
                 </p>
               )}
               {trip.insuranceEnabled && (

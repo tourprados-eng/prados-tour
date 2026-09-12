@@ -102,7 +102,9 @@ export function CheckoutWizard({
   brandName: string;
 }) {
   const [step, setStep] = useState(0);
-  const [quantity, setQuantity] = useState(1);
+  const [adultCount, setAdultCount] = useState(1);
+  const [childCount, setChildCount] = useState(0);
+  const quantity = adultCount + childCount;
   const [boardingPointId, setBoardingPointId] = useState(boarding[0]?.point.id || "");
   const [method, setMethod] = useState<"PIX" | "CARTAO">("PIX");
   const [plan, setPlan] = useState<"TOTAL" | "PARCIAL">("TOTAL");
@@ -182,12 +184,26 @@ export function CheckoutWizard({
       ? total
       : Math.round((total / 2) * 100) / 100;
 
-  function updateQuantity(q: number) {
-    const next = Math.max(1, Math.min(availableSeats, q));
-    setQuantity(next);
+  function syncPassengerQuantity(nextAdults: number, nextChildren: number) {
+    const adults = Math.max(
+      1,
+      Math.min(availableSeats, Math.floor(nextAdults || 0)),
+    );
+
+    const children = Math.max(
+      0,
+      Math.min(availableSeats - adults, Math.floor(nextChildren || 0)),
+    );
+
+    const total = adults + children;
+
+    setAdultCount(adults);
+    setChildCount(children);
+
     setPassengers((prev) => {
       const copy = [...prev];
-      while (copy.length < next) {
+
+      while (copy.length < total) {
         copy.push({
           name: "",
           cpf: "",
@@ -196,8 +212,17 @@ export function CheckoutWizard({
           seatGroup: "1",
         });
       }
-      return copy.slice(0, next);
+
+      return copy.slice(0, total);
     });
+  }
+
+  function updateAdultCount(value: number) {
+    syncPassengerQuantity(value, childCount);
+  }
+
+  function updateChildCount(value: number) {
+    syncPassengerQuantity(adultCount, value);
   }
 
   function submit() {
@@ -333,15 +358,41 @@ export function CheckoutWizard({
 
       <div className="surface-card mt-8 p-5 sm:p-7">
         {step === 0 && (
-          <div className="space-y-4">
-            <p className="font-semibold text-[#2F2328]">Quantidade de passageiros</p>
-            <Input
-              type="number"
-              min={1}
-              max={availableSeats}
-              value={quantity}
-              onChange={(e) => updateQuantity(Number(e.target.value))}
-            />
+          <div className="space-y-5">
+            <p className="font-semibold text-[#2F2328]">Quem vai viajar?</p>
+
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label>Adultos</Label>
+                <Input
+                  type="number"
+                  min={1}
+                  max={availableSeats}
+                  value={adultCount}
+                  onChange={(e) => updateAdultCount(Number(e.target.value))}
+                />
+              </div>
+
+              <div>
+                <Label>Crianças de 0 a 5 anos</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  max={Math.max(0, availableSeats - adultCount)}
+                  value={childCount}
+                  onChange={(e) => updateChildCount(Number(e.target.value))}
+                />
+              </div>
+            </div>
+
+            <div className="rounded-2xl border border-[#F2D3E1] bg-[#FFF9FC] p-4 text-sm text-[#6B5B63]">
+              <strong className="text-[#2F2328]">
+                Total de passageiros: {quantity}
+              </strong>
+              <p className="mt-1">
+                A idade será confirmada pela data de nascimento de cada passageiro.
+              </p>
+            </div>
           </div>
         )}
 

@@ -15,7 +15,7 @@ function normalizeStore(store: DataStore): DataStore {
   // Normaliza viagens com campos novos (compatibilidade com store.json antigo).
   for (const trip of store.trips ?? []) {
     trip.childPrice ??= 0;
-    trip.childMaxAge ??= 11;
+    trip.childMaxAge ??= 5;
     trip.childUnder5FreeWithTwoAdults ??= false;
     trip.insuranceEnabled ??= false;
     trip.insurancePrice ??= 20;
