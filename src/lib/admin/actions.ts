@@ -684,6 +684,7 @@ export async function upsertTrip(data: {
   destination: string;
   category: string;
   date: string;
+  departureDate: string;
   departureTime: string;
   returnTime: string;
   returnDate?: string;
@@ -774,6 +775,7 @@ export async function upsertTrip(data: {
         destination: data.destination,
         category: data.category,
         date: data.date,
+        departureDate: data.departureDate,
         departureTime: data.departureTime,
         returnTime: data.returnTime,
         returnDate: data.returnDate?.trim() ? data.returnDate : null,
@@ -834,6 +836,7 @@ export async function upsertTrip(data: {
         destination: data.destination,
         category: data.category,
         date: data.date,
+        departureDate: data.departureDate,
         departureTime: data.departureTime,
         returnTime: data.returnTime,
         returnDate: data.returnDate?.trim() ? data.returnDate : null,

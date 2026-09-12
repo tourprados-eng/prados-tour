@@ -49,6 +49,7 @@ export interface Trip {
   destination: string;
   category: string;
   date: string;
+  departureDate: string | null;
   departureTime: string | null;
   returnTime: string | null;
   returnDate?: string | null;

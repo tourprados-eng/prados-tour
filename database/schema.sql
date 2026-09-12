@@ -18,7 +18,7 @@ create table public.profiles(
 );
 create table public.trips(
  id uuid primary key default gen_random_uuid(), name text not null, slug text not null unique, destination text not null, category text not null,
- date date not null, departure_time time, return_time time, price_person numeric(12,2) not null check(price_person>=0), price_couple numeric(12,2), total_seats int not null check(total_seats>0),
+ date date not null, departure_date date, departure_time time, return_time time, price_person numeric(12,2) not null check(price_person>=0), price_couple numeric(12,2), total_seats int not null check(total_seats>0),
  description text, itinerary text, included text, not_included text, rules text, cancellation_policy text, form_url text, form_required boolean not null default false, status public.trip_status not null default 'RASCUNHO',
  deleted_at timestamptz,
  created_at timestamptz not null default now(), updated_at timestamptz not null default now()

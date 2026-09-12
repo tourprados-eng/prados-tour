@@ -206,9 +206,10 @@ export default function TripForm({
     formData.set("imageUrls", JSON.stringify(orderedUrls));
 
     const date = String(formData.get("date"));
+    const departureDate = String(formData.get("departureDate"));
     const returnDate = String(formData.get("returnDate") || "");
 
-    if (returnDate && returnDate < date) {
+    if (returnDate && returnDate < departureDate) {
       alert("A data de retorno não pode ser anterior à data de saída.");
       return;
     }
@@ -219,6 +220,7 @@ export default function TripForm({
       destination: String(formData.get("destination")),
       category: String(formData.get("category")),
       date,
+      departureDate,
       departureTime: String(formData.get("departureTime")),
       returnTime: String(formData.get("returnTime")),
       returnDate: returnDate || undefined,
@@ -332,6 +334,19 @@ export default function TripForm({
                 />
               </div>
 
+              <div>
+                <label className="mb-2 block text-sm font-semibold text-[#302229]">
+                  Data da viagem *
+                </label>
+                <input
+                  name="date"
+                  type="date"
+                  required
+                  defaultValue={trip?.date ?? ""}
+                  className="h-12 w-full rounded-xl border border-[#ddd2d8] bg-white px-4 text-sm outline-none focus:border-[#ec3f88]"
+                />
+              </div>
+
               <div className="rounded-2xl border border-[#f2dce5] bg-[#fff8fb] p-4">
                 <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#ec3f88]">
                   Saída
@@ -339,20 +354,20 @@ export default function TripForm({
                 <div className="mt-3 grid grid-cols-2 gap-3">
                   <div>
                     <label className="mb-2 block text-sm font-semibold text-[#302229]">
-                      Data de saída *
+                      Data da saída *
                     </label>
                     <input
-                      name="date"
+                      name="departureDate"
                       type="date"
                       required
-                      defaultValue={trip?.date ?? ""}
+                      defaultValue={trip?.departureDate ?? trip?.date ?? ""}
                       className="h-12 w-full rounded-xl border border-[#ddd2d8] bg-white px-4 text-sm outline-none focus:border-[#ec3f88]"
                     />
                   </div>
 
                   <div>
                     <label className="mb-2 block text-sm font-semibold text-[#302229]">
-                      Horário de saída *
+                      Horário da saída *
                     </label>
                     <input
                       name="departureTime"
@@ -372,20 +387,21 @@ export default function TripForm({
                 <div className="mt-3 grid grid-cols-2 gap-3">
                   <div>
                     <label className="mb-2 block text-sm font-semibold text-[#302229]">
-                      Data de retorno
+                      Data do retorno *
                     </label>
                     <input
                       name="returnDate"
                       type="date"
+                      required
                       defaultValue={trip?.returnDate ?? ""}
-                      min={trip?.date ?? undefined}
+                      min={trip?.departureDate ?? trip?.date ?? undefined}
                       className="h-12 w-full rounded-xl border border-[#ddd2d8] bg-white px-4 text-sm outline-none focus:border-[#ec3f88]"
                     />
                   </div>
 
                   <div>
                     <label className="mb-2 block text-sm font-semibold text-[#302229]">
-                      Horário de retorno *
+                      Horário do retorno *
                     </label>
                     <input
                       name="returnTime"
