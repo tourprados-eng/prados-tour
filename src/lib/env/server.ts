@@ -19,18 +19,6 @@ export function getAuthSecret() {
 }
 
 /**
- * O segredo é obrigatório em produção. Em desenvolvimento, sua ausência mantém
- * o webhook de demonstração utilizável, mas nunca deve ser aceita em deploy.
- */
-export function getPaymentWebhookSecret() {
-  const value = process.env.PAYMENT_WEBHOOK_SECRET?.trim();
-  if (!value && isProductionEnvironment()) {
-    throw new Error("A variável de ambiente PAYMENT_WEBHOOK_SECRET é obrigatória em produção.");
-  }
-  return value || null;
-}
-
-/**
  * E-mail da conta designada como Super Admin do sistema. Não é um segredo
  * (é um identificador público da conta); serve apenas para identificar a
  * conta prevista pelo sistema em validações/cross-check. Ausente se não
@@ -38,4 +26,41 @@ export function getPaymentWebhookSecret() {
  */
 export function getSuperAdminEmail(): string | null {
   return process.env.SUPER_ADMIN_EMAIL?.trim().toLowerCase() || null;
+}
+
+/**
+ * Chave de API do Asaas. Exclusiva do servidor; nunca expor ao cliente.
+ */
+export function getAsaasApiKey() {
+  return getRequiredServerEnv("ASAAS_API_KEY");
+}
+
+/**
+ * URL base da API do Asaas, derivada apenas de ASAAS_ENVIRONMENT
+ * ("sandbox" ou "production"). Valores arbitrários não são aceitos.
+ */
+export function getAsaasBaseUrl() {
+  const environment = process.env.ASAAS_ENVIRONMENT?.trim();
+  if (environment === "sandbox") {
+    return "https://api-sandbox.asaas.com/v3";
+  }
+  if (environment === "production") {
+    return "https://api.asaas.com/v3";
+  }
+  throw new Error(
+    `A variável de ambiente ASAAS_ENVIRONMENT é obrigatória e deve ser "sandbox" ou "production". Valor recebido: ${environment ?? "(ausente)"}.`,
+  );
+}
+
+/**
+ * Token de verificação de webhooks do Asaas. Obrigatório em produção. Em
+ * desenvolvimento, sua ausência mantém o fluxo utilizável, mas nunca deve
+ * ser aceita em deploy.
+ */
+export function getAsaasWebhookToken() {
+  const value = process.env.ASAAS_WEBHOOK_TOKEN?.trim();
+  if (!value && isProductionEnvironment()) {
+    throw new Error("A variável de ambiente ASAAS_WEBHOOK_TOKEN é obrigatória em produção.");
+  }
+  return value || null;
 }

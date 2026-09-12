@@ -24,7 +24,7 @@ Regras críticas (vagas, preço, cupom, assento, pagamento) são validadas no **
 ```bash
 cd ~/prados-tour
 cp .env.example .env.local
-# gere AUTH_SECRET e PAYMENT_WEBHOOK_SECRET com: openssl rand -base64 32
+# gere AUTH_SECRET com: openssl rand -base64 32; e ASAAS_WEBHOOK_TOKEN com: openssl rand -hex 32
 npm install
 npm run dev
 ```
@@ -72,7 +72,7 @@ Em `/admin/configuracoes` altere cores, logo, banner, WhatsApp, Instagram e e-ma
 4. Se o projeto Supabase já existia antes desta versão, execute também `database/migrations/001_production_hardening.sql`
 5. Preencha `NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY` e `SUPABASE_URL`
 6. Use apenas a **anon/publishable key** no cliente; `SUPABASE_SERVICE_ROLE_KEY` só no servidor
-7. Configure o webhook do gateway apontando para `/api/webhooks/payment` com `PAYMENT_WEBHOOK_SECRET`
+7. Configure o webhook do Asaas apontando para `/api/webhooks/payment`, autenticado pelo header `asaas-access-token` com o token `ASAAS_WEBHOOK_TOKEN`
 
 ### Preparação de infraestrutura
 
@@ -87,7 +87,7 @@ O app atual funciona 100% no modo store local. A camada Supabase do schema já c
 ## Deploy
 
 - Vercel / Node 20+
-- Defina `AUTH_SECRET` e `PAYMENT_WEBHOOK_SECRET` fortes; o app não possui fallback de JWT
+- Defina `AUTH_SECRET` e `ASAAS_WEBHOOK_TOKEN` fortes; o app não possui fallback de JWT
 - Monte volume persistente para `.data/`, configure `LOCAL_STORE_BACKUP_DIR` fora do repositório **ou** migre a store para Supabase
 - Domínio HTTPS obrigatório para cookies `secure`
 

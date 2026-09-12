@@ -157,6 +157,7 @@ export interface Payment {
   netAmount: number;
   paidAt: string | null;
   pixCopyPaste: string | null;
+  asaasExternalReference?: string | null;
   metadata: Record<string, unknown>;
   createdAt: string;
 }
