@@ -13,10 +13,12 @@ type BoardingPoint = {
   active: boolean;
 };
 
-type SelectedImage = {
-  id: string;
-  file: File;
-  preview: string;
+type ImageItem = {
+  key: string;
+  source: "saved" | "new";
+  url?: string;
+  file?: File;
+  preview?: string;
 };
 
 export default function TripForm({
@@ -36,8 +38,10 @@ export default function TripForm({
     initialTimes[link.boardingPointId] = link.time;
   }
 
-  const [images, setImages] = useState<SelectedImage[]>([]);
-  const [savedUrls, setSavedUrls] = useState<string[]>(existingUrls);
+  const [items, setItems] = useState<ImageItem[]>(
+    existingUrls.map((url) => ({ key: url, source: "saved", url })),
+  );
+  const [imageDragIndex, setImageDragIndex] = useState<number | null>(null);
   const [selectedPoints, setSelectedPoints] = useState<Record<string, boolean>>(initialPoints);
   const [times, setTimes] = useState<Record<string, string>>(initialTimes);
   const [order, setOrder] = useState<string[]>(
@@ -102,20 +106,45 @@ export default function TripForm({
       ["image/jpeg", "image/png", "image/webp"].includes(file.type),
     );
 
-    const next = accepted.map((file) => ({
-      id: `${file.name}-${file.size}-${file.lastModified}-${Math.random()}`,
+    const next: ImageItem[] = accepted.map((file) => ({
+      key: `${file.name}-${file.size}-${file.lastModified}-${Math.random()}`,
+      source: "new",
       file,
       preview: URL.createObjectURL(file),
     }));
 
-    setImages((current) => [...current, ...next]);
+    setItems((current) => [...current, ...next]);
   }
 
-  function removeImage(id: string) {
-    setImages((current) => {
-      const found = current.find((image) => image.id === id);
-      if (found) URL.revokeObjectURL(found.preview);
-      return current.filter((image) => image.id !== id);
+  function removeImage(key: string) {
+    setItems((current) => {
+      const found = current.find((image) => image.key === key);
+      if (found?.preview) URL.revokeObjectURL(found.preview);
+      return current.filter((image) => image.key !== key);
+    });
+  }
+
+  function moveImage(from: number, to: number) {
+    setItems((current) => {
+      if (from < 0 || from >= current.length || to < 0 || to >= current.length) {
+        return current;
+      }
+      const next = [...current];
+      const [moved] = next.splice(from, 1);
+      next.splice(to, 0, moved);
+      return next;
+    });
+  }
+
+  function setMainImage(key: string) {
+    setItems((current) => {
+      if (current.length <= 1) return current;
+      const index = current.findIndex((image) => image.key === key);
+      if (index <= 0) return current;
+      const next = [...current];
+      const [moved] = next.splice(index, 1);
+      next.unshift(moved);
+      return next;
     });
   }
 
@@ -140,45 +169,59 @@ export default function TripForm({
     formData.set("featured", featured ? "true" : "false");
 
     /*
-     * As imagens serão enviadas para a API de upload antes de salvar
-     * a viagem. Imagens já salvas são mantidas; à medida que novas são
-     * enviadas, são anexadas à lista.
+     * As imagens são enviadas para a API de upload antes de salvar a viagem.
+     * A ordem dos itens define a ordem final (a primeira é a foto principal);
+     * imagens já salvas são mantidas e novas são enviadas na posição em que o
+     * administrador as deixou.
      */
-    const uploadedUrls: string[] = [];
+    const orderedUrls: string[] = [];
 
-    for (const image of images) {
-      const uploadData = new FormData();
-      uploadData.append("file", image.file);
-
-      const response = await fetch("/api/admin/trip-images", {
-        method: "POST",
-        body: uploadData,
-      });
-
-      if (!response.ok) {
-        alert("Não foi possível enviar uma das imagens.");
-        return;
+    for (const item of items) {
+      if (item.source === "saved" && item.url) {
+        orderedUrls.push(item.url);
+        continue;
       }
+      if (item.source === "new" && item.file) {
+        const uploadData = new FormData();
+        uploadData.append("file", item.file);
 
-      const result = await response.json();
+        const response = await fetch("/api/admin/trip-images", {
+          method: "POST",
+          body: uploadData,
+        });
 
-      if (result.url) {
-        uploadedUrls.push(result.url);
+        if (!response.ok) {
+          alert("Não foi possível enviar uma das imagens.");
+          return;
+        }
+
+        const result = await response.json();
+
+        if (result.url) {
+          orderedUrls.push(result.url);
+        }
       }
     }
 
-    const imageUrls = [...savedUrls, ...uploadedUrls];
-    formData.set("imageUrls", JSON.stringify(imageUrls));
+    formData.set("imageUrls", JSON.stringify(orderedUrls));
+
+    const date = String(formData.get("date"));
+    const returnDate = String(formData.get("returnDate") || "");
+
+    if (returnDate && returnDate < date) {
+      alert("A data de retorno não pode ser anterior à data de saída.");
+      return;
+    }
 
     const result = await upsertTrip({
       id: trip?.id,
       name: String(formData.get("name")),
       destination: String(formData.get("destination")),
       category: String(formData.get("category")),
-      date: String(formData.get("date")),
+      date,
       departureTime: String(formData.get("departureTime")),
       returnTime: String(formData.get("returnTime")),
-      returnDate: String(formData.get("returnDate") || ""),
+      returnDate: returnDate || undefined,
       pricePerson: Number(formData.get("pricePerson")),
       priceCouple: Number(formData.get("priceCouple") || 0),
       totalSeats: Number(formData.get("totalSeats")),
@@ -189,8 +232,8 @@ export default function TripForm({
       rules: String(formData.get("rules")),
       cancellationPolicy: String(formData.get("cancellationPolicy")),
       status: String(formData.get("status")) as TripStatus,
-      imageUrl: imageUrls[0] || undefined,
-      imageUrls,
+      imageUrl: orderedUrls[0] || undefined,
+      imageUrls: orderedUrls,
       formUrl: formUrl.trim() || undefined,
       formRequired,
       boardingPoints: selectedBoardingPoints,
@@ -289,55 +332,70 @@ export default function TripForm({
                 />
               </div>
 
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-[#302229]">
-                  Data da viagem *
-                </label>
-                <input
-                  name="date"
-                  type="date"
-                  required
-                  defaultValue={trip?.date ?? ""}
-                  className="h-12 w-full rounded-xl border border-[#ddd2d8] px-4 text-sm outline-none focus:border-[#ec3f88]"
-                />
+              <div className="rounded-2xl border border-[#f2dce5] bg-[#fff8fb] p-4">
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#ec3f88]">
+                  Saída
+                </p>
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-[#302229]">
+                      Data de saída *
+                    </label>
+                    <input
+                      name="date"
+                      type="date"
+                      required
+                      defaultValue={trip?.date ?? ""}
+                      className="h-12 w-full rounded-xl border border-[#ddd2d8] bg-white px-4 text-sm outline-none focus:border-[#ec3f88]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-[#302229]">
+                      Horário de saída *
+                    </label>
+                    <input
+                      name="departureTime"
+                      type="time"
+                      required
+                      defaultValue={trip?.departureTime ?? ""}
+                      className="h-12 w-full rounded-xl border border-[#ddd2d8] bg-white px-4 text-sm outline-none focus:border-[#ec3f88]"
+                    />
+                  </div>
+                </div>
               </div>
 
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-[#302229]">
-                  Data de retorno
-                </label>
-                <input
-                  name="returnDate"
-                  type="date"
-                  defaultValue={trip?.returnDate ?? ""}
-                  className="h-12 w-full rounded-xl border border-[#ddd2d8] px-4 text-sm outline-none focus:border-[#ec3f88]"
-                />
-              </div>
+              <div className="rounded-2xl border border-[#f2dce5] bg-[#fff8fb] p-4">
+                <p className="text-xs font-bold uppercase tracking-[0.14em] text-[#f28c28]">
+                  Retorno
+                </p>
+                <div className="mt-3 grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-[#302229]">
+                      Data de retorno
+                    </label>
+                    <input
+                      name="returnDate"
+                      type="date"
+                      defaultValue={trip?.returnDate ?? ""}
+                      min={trip?.date ?? undefined}
+                      className="h-12 w-full rounded-xl border border-[#ddd2d8] bg-white px-4 text-sm outline-none focus:border-[#ec3f88]"
+                    />
+                  </div>
 
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-[#302229]">
-                  Horário de saída *
-                </label>
-                <input
-                  name="departureTime"
-                  type="time"
-                  required
-                  defaultValue={trip?.departureTime ?? ""}
-                  className="h-12 w-full rounded-xl border border-[#ddd2d8] px-4 text-sm outline-none focus:border-[#ec3f88]"
-                />
-              </div>
-
-              <div>
-                <label className="mb-2 block text-sm font-semibold text-[#302229]">
-                  Horário de retorno *
-                </label>
-                <input
-                  name="returnTime"
-                  type="time"
-                  required
-                  defaultValue={trip?.returnTime ?? ""}
-                  className="h-12 w-full rounded-xl border border-[#ddd2d8] px-4 text-sm outline-none focus:border-[#ec3f88]"
-                />
+                  <div>
+                    <label className="mb-2 block text-sm font-semibold text-[#302229]">
+                      Horário de retorno *
+                    </label>
+                    <input
+                      name="returnTime"
+                      type="time"
+                      required
+                      defaultValue={trip?.returnTime ?? ""}
+                      className="h-12 w-full rounded-xl border border-[#ddd2d8] bg-white px-4 text-sm outline-none focus:border-[#ec3f88]"
+                    />
+                  </div>
+                </div>
               </div>
 
               <div>
@@ -753,61 +811,77 @@ export default function TripForm({
               className="hidden"
             />
 
-            {(savedUrls.length > 0 || images.length > 0) && (
-              <div className="mt-4 grid grid-cols-2 gap-3">
-                {savedUrls.map((url) => (
-                  <div
-                    key={url}
-                    className="group relative overflow-hidden rounded-xl border border-[#eadfe4]"
-                  >
-                    {/* eslint-disable-next-line @next/next/no-img-element -- preview de imagens salvas (URLs remotas/fixas) */}
-                    <img
-                      src={url}
-                      alt=""
-                      className="h-32 w-full object-cover"
-                    />
+            {items.length > 0 && (
+              <div className="mt-4 space-y-2">
+                <p className="text-xs font-semibold text-[#77666e]">
+                  Arraste para reordenar. A primeira foto é a capa da viagem.
+                </p>
 
-                    <button
-                      type="button"
-                      onClick={() =>
-                        setSavedUrls((current) => current.filter((u) => u !== url))
+                {items.map((image, index) => (
+                  <div
+                    key={image.key}
+                    draggable
+                    onDragStart={() => setImageDragIndex(index)}
+                    onDragOver={(event) => event.preventDefault()}
+                    onDragEnd={() => setImageDragIndex(null)}
+                    onDrop={() => {
+                      if (imageDragIndex !== null && imageDragIndex !== index) {
+                        moveImage(imageDragIndex, index);
                       }
-                      className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-lg bg-black/70 text-white opacity-0 transition group-hover:opacity-100"
-                    >
-                      <Trash2 size={16} />
-                    </button>
-
-                    <div className="absolute bottom-0 left-0 right-0 bg-black/45 px-2 py-1 text-[10px] text-white">
-                      Salva
-                    </div>
-                  </div>
-                ))}
-
-                {images.map((image) => (
-                  <div
-                    key={image.id}
-                    className="group relative overflow-hidden rounded-xl border border-[#eadfe4]"
+                      setImageDragIndex(null);
+                    }}
+                    className={`flex items-center gap-3 rounded-2xl border bg-white p-2 pr-3 transition ${
+                      imageDragIndex === index
+                        ? "border-[#ec3f88] bg-[#ffe5f0]"
+                        : "border-[#f4b3ce] bg-[#fff7fa]"
+                    }`}
                   >
-                    {/* eslint-disable-next-line @next/next/no-img-element -- preview usa blob: URL (objectURL), que next/image não aceita */}
+                    {/* eslint-disable-next-line @next/next/no-img-element -- preview usa blob: URL (objectURL) ou URL remota/fixa */}
                     <img
-                      src={image.preview}
+                      src={image.source === "saved" ? image.url : image.preview}
                       alt=""
-                      className="h-32 w-full object-cover"
+                      className="h-16 w-20 shrink-0 rounded-xl object-cover"
                     />
+
+                    <div className="min-w-0 flex-1">
+                      <p className="truncate text-sm font-bold text-[#302229]">
+                        {image.source === "saved"
+                          ? "Foto da viagem"
+                          : image.file?.name || "Foto da viagem"}
+                      </p>
+                      <p className="text-xs text-[#77666e]">
+                        {index === 0
+                          ? "Foto principal (capa)"
+                          : `Posição ${index + 1}`}
+                      </p>
+                    </div>
+
+                    {index !== 0 && (
+                      <button
+                        type="button"
+                        onClick={() => setMainImage(image.key)}
+                        title="Definir como foto principal"
+                        className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#b197a2] transition hover:bg-amber-50 hover:text-amber-500"
+                      >
+                        <Star size={17} />
+                      </button>
+                    )}
+
+                    <span
+                      className="cursor-grab select-none text-[#b297a3]"
+                      title="Arraste para reordenar"
+                    >
+                      <GripVertical size={18} />
+                    </span>
 
                     <button
                       type="button"
-                      onClick={() => removeImage(image.id)}
-                      className="absolute right-2 top-2 flex h-8 w-8 items-center justify-center rounded-lg bg-black/70 text-white opacity-0 transition group-hover:opacity-100"
+                      onClick={() => removeImage(image.key)}
+                      title="Remover foto"
+                      className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-[#b197a2] transition hover:bg-red-50 hover:text-red-500"
                     >
                       <Trash2 size={16} />
                     </button>
-
-                    <div className="absolute bottom-0 left-0 right-0 bg-black/45 px-2 py-1 text-[10px] text-white">
-                      {image.file.name.length > 20
-                        ? image.file.name.slice(0, 20) + "..."
-                        : image.file.name}
-                    </div>
                   </div>
                 ))}
               </div>

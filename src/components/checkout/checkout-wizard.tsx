@@ -246,7 +246,18 @@ export function CheckoutWizard({
           "DADOS DA RESERVA",
           `Reserva: ${result.reference}`,
           `Viagem: ${trip.name}`,
-          `Data: ${new Date(`${trip.date}T12:00:00`).toLocaleDateString("pt-BR")}`,
+          `Saída: ${new Date(`${trip.date}T12:00:00`).toLocaleDateString("pt-BR")}${trip.departureTime ? ` às ${trip.departureTime}` : ""}`,
+          ...(trip.returnDate || trip.returnTime
+            ? [
+                `Retorno: ${
+                  trip.returnDate
+                    ? new Date(`${trip.returnDate}T12:00:00`).toLocaleDateString(
+                        "pt-BR",
+                      )
+                    : ""
+                }${trip.returnTime ? ` às ${trip.returnTime}` : ""}`,
+              ]
+            : []),
           `Passageiros: ${quantity}`,
           `Ponto de embarque: ${boarding.find((b) => b.point.id === boardingPointId)?.point.name ?? ""}`,
           "",

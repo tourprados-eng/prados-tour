@@ -1,4 +1,6 @@
 import { notFound } from "next/navigation";
+import { existsSync } from "fs";
+import path from "path";
 import { getTripBySlug } from "@/lib/booking/actions";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -10,7 +12,7 @@ import {
   eligiblePromotions,
   promotionSummary,
 } from "@/lib/pricing";
-import { TripCover } from "@/components/trips/trip-cover";
+import { TripGallery } from "@/components/trips/trip-gallery";
 import { ReviewForm } from "@/components/reviews/review-form";
 
 export default async function TripDetailPage({
@@ -51,18 +53,25 @@ export default async function TripDetailPage({
         (b.status === "CONFIRMADA" || b.status === "CONCLUIDA"),
     );
 
+  // Filtra as URLs realmente utilizáveis para a galeria (absolutas ou presentes
+  // no filesystem de public/), evitando thumbnails quebrados.
+  const validImages = (trip.images ?? []).filter((url) => {
+    if (!url) return false;
+    if (/^https?:\/\//i.test(url)) return true;
+    try {
+      const relative = url.startsWith("/") ? url.slice(1) : url;
+      return existsSync(path.join(process.cwd(), "public", relative));
+    } catch {
+      return false;
+    }
+  });
+
   return (
     <div className="section-pad pt-8 md:pt-12">
       <div className="container-page">
         <div className="grid gap-8 lg:grid-cols-2 lg:gap-12">
-          <div className="relative aspect-[4/3] overflow-hidden rounded-[1.5rem] bg-brand-tint shadow-card">
-            <TripCover
-              images={trip.images}
-              alt={trip.name}
-              sizes="(max-width: 1024px) 100vw, 50vw"
-              priority
-              className="object-cover"
-            />
+          <div>
+            <TripGallery images={validImages} alt={trip.name} />
           </div>
 
           <div className="min-w-0">

@@ -3,15 +3,19 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { Trash2 } from "lucide-react";
-import { deleteTripAction } from "@/lib/admin/actions";
+import { deleteClientAction } from "@/lib/admin/actions";
 
-type DeleteTripButtonProps = {
-  tripId: string;
-  tripName: string;
-  hasHistory?: boolean;
+type DeleteClientButtonProps = {
+  clientId: string;
+  clientName: string;
+  hasHistory: boolean;
 };
 
-export default function DeleteTripButton({ tripId, tripName, hasHistory }: DeleteTripButtonProps) {
+export default function DeleteClientButton({
+  clientId,
+  clientName,
+  hasHistory,
+}: DeleteClientButtonProps) {
   const router = useRouter();
   const [open, setOpen] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -45,12 +49,12 @@ export default function DeleteTripButton({ tripId, tripName, hasHistory }: Delet
   function handleDelete() {
     setError(null);
     startTransition(async () => {
-      const result = await deleteTripAction(tripId);
+      const result = await deleteClientAction(clientId);
       if (result?.ok) {
         setDefinitive(result.definitive === true);
         setSuccess(true);
       } else {
-        setError(result?.error || "Não foi possível excluir a viagem.");
+        setError(result?.error || "Não foi possível excluir o cliente.");
       }
     });
   }
@@ -64,7 +68,7 @@ export default function DeleteTripButton({ tripId, tripName, hasHistory }: Delet
           setError(null);
         }}
         className="inline-flex items-center gap-1.5 rounded-xl border border-red-200 bg-white px-3 py-2 text-sm font-semibold text-red-600 transition hover:bg-red-50"
-        title="Excluir viagem"
+        title="Excluir cliente"
       >
         <Trash2 size={15} />
         <span>Excluir</span>
@@ -81,7 +85,7 @@ export default function DeleteTripButton({ tripId, tripName, hasHistory }: Delet
             ref={dialogRef}
             role="dialog"
             aria-modal="true"
-            aria-labelledby="delete-trip-title"
+            aria-labelledby="delete-client-title"
             className="relative w-full max-w-md rounded-3xl bg-white p-6 shadow-2xl ring-1 ring-black/10"
           >
             {success ? (
@@ -100,13 +104,13 @@ export default function DeleteTripButton({ tripId, tripName, hasHistory }: Delet
                 </div>
                 <p className="mt-4 text-lg font-bold text-emerald-700">
                   {definitive
-                    ? "Viagem excluída definitivamente."
-                    : "Viagem removida do site."}
+                    ? "Cliente excluído definitivamente."
+                    : "Cliente removido."}
                 </p>
                 <p className="mt-1 text-sm text-emerald-700/70">
                   {definitive
-                    ? "Fotos, pontos de embarque e assentos também foram removidos."
-                    : "O histórico (reservas, pagamentos, comissões) foi preservado."}
+                    ? "A conta e o perfil foram removidos."
+                    : "Os dados pessoais foram anonimizados, preservando o histórico financeiro."}
                 </p>
               </div>
             ) : error ? (
@@ -140,27 +144,29 @@ export default function DeleteTripButton({ tripId, tripName, hasHistory }: Delet
                   </div>
                   <div>
                     <h2
-                      id="delete-trip-title"
+                      id="delete-client-title"
                       className="font-[family-name:var(--font-display)] text-xl font-bold"
                     >
-                      Excluir esta viagem?
+                      {hasHistory
+                        ? "Remover este cliente?"
+                        : "Excluir este cliente?"}
                     </h2>
                     <p className="mt-1 text-sm text-black/55">
-                      A viagem <strong>{tripName}</strong> será removida do site
-                      público e não poderá receber novas reservas.
+                      O cliente <strong>{clientName}</strong> será{" "}
+                      {hasHistory
+                        ? "anonimizado: nome, CPF, e-mail e telefones serão substituídos por marcadores"
+                        : "excluído definitivamente, incluindo a conta de acesso"}
+                      .
                     </p>
                     {hasHistory ? (
                       <p className="mt-3 rounded-xl bg-amber-50 px-3 py-2 text-xs text-amber-700">
-                        Esta viagem possui reservas, despesas ou avaliações
-                        vinculadas. O histórico será preservado e ela continuará
-                        visível no painel; apenas o site público será bloqueado.
+                        O histórico de reservas, pagamentos e comissões será
+                        preservado, mas o acesso do cliente será bloqueado.
                       </p>
                     ) : (
                       <p className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700">
-                        Nenhuma reserva vinculada: a viagem será excluída{" "}
-                        <strong>definitivamente</strong>, incluindo fotos,
-                        pontos de embarque, assentos e links em cupons/promoções.
-                        Esta ação não pode ser desfeita.
+                        Nenhuma reserva ou vínculo encontrado. Esta ação não
+                        pode ser desfeita.
                       </p>
                     )}
                   </div>
@@ -184,12 +190,12 @@ export default function DeleteTripButton({ tripId, tripName, hasHistory }: Delet
                     {pending ? (
                       <>
                         <span className="h-4 w-4 animate-spin rounded-full border-2 border-white/40 border-t-white" />
-                        Excluindo...
+                        {hasHistory ? "Removendo..." : "Excluindo..."}
                       </>
+                    ) : hasHistory ? (
+                      "Remover cliente"
                     ) : (
-                      hasHistory
-                        ? "Excluir viagem"
-                        : "Excluir definitivamente"
+                      "Excluir definitivamente"
                     )}
                   </button>
                 </div>

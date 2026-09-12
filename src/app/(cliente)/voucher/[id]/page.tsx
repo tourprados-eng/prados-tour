@@ -125,8 +125,16 @@ export default async function VoucherPage({
             <strong>Viagem:</strong> {trip.name}
           </p>
           <p>
-            <strong>Data:</strong> {formatDate(trip.date)}
+            <strong>Saída:</strong> {formatDate(trip.date)}
+            {trip.departureTime ? ` às ${trip.departureTime}` : ""}
           </p>
+          {(trip.returnDate || trip.returnTime) && (
+            <p>
+              <strong>Retorno:</strong>{" "}
+              {trip.returnDate ? formatDate(trip.returnDate) : ""}
+              {trip.returnTime ? ` às ${trip.returnTime}` : ""}
+            </p>
+          )}
           <p>
             <strong>Embarque:</strong> {booking.boardingPoint}
             {boardingTime ? ` às ${boardingTime}` : ""}

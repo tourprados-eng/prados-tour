@@ -727,6 +727,10 @@ export async function upsertTrip(data: {
       );
     }
 
+    if (data.returnDate && data.returnDate < data.date) {
+      throw new Error("A data de retorno não pode ser anterior à data de saída.");
+    }
+
     // Na edição, pontos já vinculados à viagem (mesmo que desativados após o
     // vínculo) continuam válidos; novos vínculos exigem ponto ativo.
     const existingTripIds = data.id
@@ -936,7 +940,15 @@ export async function setTripStatusAction(
   return { ok: true };
 }
 
-export async function deleteTripAction(tripId: string) {
+type DeleteTripResult = {
+  ok?: boolean;
+  definitive?: boolean;
+  error?: string;
+};
+
+export async function deleteTripAction(
+  tripId: string,
+): Promise<DeleteTripResult> {
   const session = await getSession();
   if (!session || !canAccess(session.role, "admin")) {
     return { error: "Sem permissão para excluir viagens." };
@@ -944,15 +956,58 @@ export async function deleteTripAction(tripId: string) {
 
   if (!tripId) return { error: "Viagem inválida." };
 
+  let outcome: { ok: boolean; definitive: boolean } | null = null;
+
   try {
-    await getRepositoryRuntime().transaction((store) => {
+    outcome = await getRepositoryRuntime().transaction((store) => {
       const trip = store.trips.find((t) => t.id === tripId);
       if (!trip) throw new Error("Viagem não encontrada.");
 
       const now = new Date().toISOString();
 
+      const hasBookings = store.bookings.some((b) => b.tripId === trip.id);
+      const hasExpenses = store.expenses.some((e) => e.tripId === trip.id);
+      const hasReviews = store.reviews.some((r) => r.tripId === trip.id);
+
+      // Exclusão definitiva apenas quando não há histórico vinculado. Nesse
+      // caso removemos a viagem e seus registros dependentes no store; no
+      // Supabase as tabelas filhas (trip_images, trip_boarding_points, seats,
+      // coupon_trips, promotion_trips) usam ON DELETE CASCADE.
+      if (!hasBookings && !hasExpenses && !hasReviews) {
+        store.trips = store.trips.filter((t) => t.id !== trip.id);
+        store.tripBoardingPoints = store.tripBoardingPoints.filter(
+          (l) => l.tripId !== trip.id,
+        );
+        store.seats = store.seats.filter((s) => s.tripId !== trip.id);
+        for (const coupon of store.coupons) {
+          if (coupon.tripIds.includes(trip.id)) {
+            coupon.tripIds = coupon.tripIds.filter((id) => id !== trip.id);
+          }
+        }
+        for (const promotion of store.promotions) {
+          if (promotion.tripIds.includes(trip.id)) {
+            promotion.tripIds = promotion.tripIds.filter((id) => id !== trip.id);
+          }
+        }
+
+        store.auditLogs.push({
+          id: uuid(),
+          userId: session.id,
+          action: "DELETE_TRIP",
+          entity: "trips",
+          entityId: trip.id,
+          oldValue: { name: trip.name, status: trip.status },
+          newValue: { definitive: true },
+          ip: null,
+          createdAt: now,
+        });
+
+        return { ok: true, definitive: true };
+      }
+
       // Soft delete: preserva reservas, pagamentos, comissões e histórico.
       trip.deletedAt = now;
+      trip.updatedAt = now;
 
       store.auditLogs.push({
         id: uuid(),
@@ -965,17 +1020,170 @@ export async function deleteTripAction(tripId: string) {
         ip: null,
         createdAt: now,
       });
+
+      return { ok: true, definitive: false };
     });
   } catch (e) {
     return { error: e instanceof Error ? e.message : "Erro ao excluir viagem." };
   }
 
-  revalidatePath("/admin/viagens");
-  revalidatePath("/");
-  revalidatePath("/excursoes");
-  revalidatePath("/ofertas");
-  revalidatePath("/operacional");
-  return { ok: true };
+  if (outcome?.ok) {
+    revalidatePath("/admin/viagens");
+    revalidatePath("/");
+    revalidatePath("/excursoes");
+    revalidatePath("/ofertas");
+    revalidatePath("/operacional");
+  }
+
+  return outcome ?? { error: "Erro ao excluir viagem." };
+}
+
+type DeleteClientResult = {
+  ok?: boolean;
+  definitive?: boolean;
+  error?: string;
+};
+
+/**
+ * Exclui um cliente com segurança:
+ * - Sem nenhum histórico vinculado: remove definitivamente a conta e o perfil.
+ * - Com reservas/pagamentos/avaliações etc.: anonimiza os dados pessoais (LGPD)
+ *   preservando o histórico financeiro e operacional, e bloqueia o acesso.
+ */
+export async function deleteClientAction(
+  clientId: string,
+): Promise<DeleteClientResult> {
+  const session = await getSession();
+  if (!session || !canAccess(session.role, "admin")) {
+    return { error: "Sem permissão para excluir clientes." };
+  }
+
+  if (!clientId) return { error: "Cliente inválido." };
+  if (clientId === session.id) {
+    return { error: "Você não pode excluir a própria conta." };
+  }
+
+  const store = await getRepositoryRuntime().read();
+  const profile = store.profiles.find((p) => p.id === clientId);
+  if (!profile) return { error: "Cliente não encontrado." };
+  if (profile.role !== "CLIENTE") {
+    return { error: "Apenas perfis de cliente podem ser excluídos por aqui." };
+  }
+
+  const hasHistory =
+    store.bookings.some((b) => b.customerId === clientId) ||
+    store.payments.some((p) => p.customerId === clientId) ||
+    store.reviews.some((r) => r.customerId === clientId) ||
+    store.couponUsages.some((u) => u.userId === clientId) ||
+    store.promotionUsages.some((u) => u.userId === clientId) ||
+    store.loyaltyPoints.some((l) => l.customerId === clientId) ||
+    store.referrals.some(
+      (r) => r.referrerId === clientId || r.referredId === clientId,
+    ) ||
+    store.commissions.some((c) => c.sellerId === clientId) ||
+    store.expenses.some((e) => e.createdBy === clientId) ||
+    store.checkins.some((c) => c.employeeId === clientId) ||
+    store.sellers.some((s) => s.id === clientId) ||
+    store.auditLogs.some((l) => l.userId === clientId);
+
+  const now = new Date().toISOString();
+
+  if (hasHistory) {
+    try {
+      await getRepositoryRuntime().transaction((s) => {
+        const target = s.profiles.find((p) => p.id === clientId);
+        if (!target) throw new Error("Cliente não encontrado.");
+
+        target.fullName = "Cliente removido";
+        target.cpf = `REMOVED-${clientId}`;
+        target.email = `removido-${clientId}@deleted.local`;
+        target.phone = null;
+        target.whatsapp = null;
+        target.birthDate = null;
+        target.customerClass = "INATIVO";
+        target.referralCode = `REMOVED-${clientId}`;
+        target.passwordHash = undefined;
+        target.updatedAt = now;
+
+        s.auditLogs.push({
+          id: uuid(),
+          userId: session.id,
+          action: "ANONYMIZE_CLIENT",
+          entity: "profiles",
+          entityId: clientId,
+          oldValue: { fullName: profile.fullName, email: profile.email },
+          newValue: { anonymized: true },
+          ip: null,
+          createdAt: now,
+        });
+      });
+    } catch (e) {
+      return {
+        error: e instanceof Error ? e.message : "Erro ao anonimizar cliente.",
+      };
+    }
+
+    // Bloqueia o acesso da conta de autenticação, quando aplicável.
+    if (getAuthDriver() === "supabase") {
+      try {
+        const { url, serviceRoleKey } = assertSupabaseServerConfiguration();
+        const admin = createClient(url, serviceRoleKey, {
+          auth: { autoRefreshToken: false, persistSession: false },
+        });
+        await admin.auth.admin.updateUserById(clientId, {
+          email: `removido-${clientId}@deleted.local`,
+          password: uuid(),
+          email_confirm: true,
+          ban_duration: "876000h",
+        });
+      } catch {
+        // Best-effort: a anonimização do perfil já foi persistida.
+      }
+    }
+
+    revalidatePath("/admin/clientes");
+    return { ok: true, definitive: false };
+  }
+
+  // Sem histórico: exclusão definitiva, incluindo a conta de autenticação.
+  if (getAuthDriver() === "supabase") {
+    try {
+      const { url, serviceRoleKey } = assertSupabaseServerConfiguration();
+      const admin = createClient(url, serviceRoleKey, {
+        auth: { autoRefreshToken: false, persistSession: false },
+      });
+      const { error } = await admin.auth.admin.deleteUser(clientId);
+      if (error && !error.message.toLowerCase().includes("not found")) {
+        return { error: "Não foi possível excluir a conta do cliente." };
+      }
+    } catch {
+      return { error: "Não foi possível excluir a conta do cliente." };
+    }
+  }
+
+  try {
+    await getRepositoryRuntime().transaction((s) => {
+      s.profiles = s.profiles.filter((p) => p.id !== clientId);
+      s.sellers = s.sellers.filter((seller) => seller.id !== clientId);
+
+      s.auditLogs.push({
+        id: uuid(),
+        userId: session.id,
+        action: "DELETE_CLIENT",
+        entity: "profiles",
+        entityId: clientId,
+        oldValue: { fullName: profile.fullName, email: profile.email },
+        newValue: { definitive: true },
+        ip: null,
+        createdAt: now,
+      });
+    });
+  } catch (e) {
+    return { error: e instanceof Error ? e.message : "Erro ao excluir cliente." };
+  }
+
+  revalidatePath("/admin/clientes");
+  return { ok: true, definitive: true };
 }
 
 export async function createExpenseAction(formData: FormData): Promise<void> {

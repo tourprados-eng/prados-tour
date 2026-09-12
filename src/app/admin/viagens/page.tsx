@@ -41,6 +41,17 @@ export default async function AdminTripsPage() {
       (occupiedPerTrip[booking.tripId] || 0) + booking.quantity;
   }
 
+  const tripsWithHistory: Record<string, boolean> = {};
+  for (const booking of store.bookings) {
+    if (booking.tripId) tripsWithHistory[booking.tripId] = true;
+  }
+  for (const expense of store.expenses) {
+    if (expense.tripId) tripsWithHistory[expense.tripId] = true;
+  }
+  for (const review of store.reviews) {
+    if (review.tripId) tripsWithHistory[review.tripId] = true;
+  }
+
   const sorted = [...store.trips].sort((a, b) => {
     if (a.deletedAt && !b.deletedAt) return 1;
     if (!a.deletedAt && b.deletedAt) return -1;
@@ -70,8 +81,9 @@ export default async function AdminTripsPage() {
             Viagens cadastradas
           </h2>
           <p className="mt-1 text-sm text-black/50">
-            Viagens excluídas aparecem identificadas como excluídas no fim da
-            lista e preservam o histórico de reservas.
+            Viagens sem histórico são excluídas definitivamente e somem da
+            lista. Viagens com reservas/despesas/avaliações são mantidas aqui
+            identificadas como excluídas para preservar o histórico.
           </p>
         </div>
 
@@ -155,7 +167,11 @@ export default async function AdminTripsPage() {
                             tripName={trip.name}
                             archived={trip.status === "ARQUIVADA"}
                           />
-                          <DeleteTripButton tripId={trip.id} tripName={trip.name} />
+                          <DeleteTripButton
+                            tripId={trip.id}
+                            tripName={trip.name}
+                            hasHistory={!!tripsWithHistory[trip.id]}
+                          />
                         </div>
                       </td>
                     </tr>
