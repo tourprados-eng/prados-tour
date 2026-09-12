@@ -18,6 +18,28 @@ export function round2(value: number) {
   return Math.round(value * 100) / 100;
 }
 
+/** Idade completa de uma pessoa na data da viagem (YYYY-MM-DD). */
+export function ageAtDate(birthDate: string, tripDate: string): number {
+  const [by, bm, bd] = birthDate.slice(0, 10).split("-").map(Number);
+  const [ty, tm, td] = tripDate.slice(0, 10).split("-").map(Number);
+  let age = ty - by;
+  if (tm < bm || (tm === bm && td < bd)) age -= 1;
+  return Math.max(0, age);
+}
+
+/**
+ * Categoria de preço do passageiro a partir da data de nascimento: criança
+ * apenas quando a viagem define childMaxAge E o passageiro tem idade <= limite.
+ */
+export function passengerCategory(
+  birthDate: string | null | undefined,
+  tripDate: string,
+  childMaxAge: number | null,
+): "ADULTO" | "CRIANCA" {
+  if (!childMaxAge || childMaxAge <= 0 || !birthDate) return "ADULTO";
+  return ageAtDate(birthDate, tripDate) <= childMaxAge ? "CRIANCA" : "ADULTO";
+}
+
 /** Preços efetivos (pessoa/dupla) considerando uma promoção de preço/dupla. */
 export function effectiveTripPrices(trip: Trip, promotion?: Promotion | null) {
   if (promotion?.discountType === "PRECO") {
@@ -40,17 +62,43 @@ export function baseTripPrice(
   return calculateTripPrice(quantity, personPrice, couplePrice);
 }
 
+/**
+ * Contabiliza a base ("ticket") de uma reserva:
+ * - com passageiros: adultos pagam pessoa/dupla (duplas ganham o preço de
+ *   casal) e crianças pagam `trip.childPrice` (ou pessoa, se não configurado);
+ * - sem passageiros: todos os lugares pagam pessoa/dupla (comportamento antigo).
+ */
+function tripsTicket(
+  trip: Trip,
+  quantity: number,
+  promotion: Promotion | null | undefined,
+  passengers?: Array<{ birthDate?: string | null }>,
+): { adultCount: number; childCount: number; base: number } {
+  const { personPrice, couplePrice } = effectiveTripPrices(trip, promotion);
+  if (passengers && passengers.length > 0) {
+    const childCount = passengers.filter(
+      (p) => passengerCategory(p.birthDate, trip.date, trip.childMaxAge) === "CRIANCA",
+    ).length;
+    const adultCount = passengers.length - childCount;
+    const adultBase = calculateTripPrice(adultCount, personPrice, couplePrice);
+    const childPrice = trip.childPrice ?? personPrice;
+    return { adultCount, childCount, base: round2(adultBase + childCount * childPrice) };
+  }
+  return { adultCount: quantity, childCount: 0, base: calculateTripPrice(quantity, personPrice, couplePrice) };
+}
+
 /** Monetiza o desconto da promoção sobre um valor base. */
 export function promotionDiscountAmount(
   store: DataStore,
   promotion: Promotion | null,
   trip: Trip,
   quantity: number,
+  passengers?: Array<{ birthDate?: string | null }>,
 ): number {
   if (!promotion) return 0;
-  const base = baseTripPrice(quantity, trip);
+  const base = tripsTicket(trip, quantity, null, passengers).base;
   if (promotion.discountType === "PRECO") {
-    const promoBase = baseTripPrice(quantity, trip, promotion);
+    const promoBase = tripsTicket(trip, quantity, promotion, passengers).base;
     return Math.max(0, round2(base - promoBase));
   }
   if (promotion.discountType === "PERCENTUAL") {
@@ -84,11 +132,12 @@ export function bestPromotionForTrip(
   trip: Trip,
   promotions: Promotion[],
   quantity: number,
+  passengers?: Array<{ birthDate?: string | null }>,
 ): Promotion | null {
   let best: Promotion | null = null;
   let bestDiscount = -1;
   for (const promotion of promotions) {
-    const discount = promotionDiscountAmount(store, promotion, trip, quantity);
+    const discount = promotionDiscountAmount(store, promotion, trip, quantity, passengers);
     if (discount > bestDiscount) {
       best = promotion;
       bestDiscount = discount;
@@ -145,6 +194,10 @@ export type PriceBreakdown = {
   pixDiscount: number;
   totalAmount: number;
   discountAmount: number;
+  adultCount: number;
+  childCount: number;
+  insuranceAmount: number;
+  insuranceCount: number;
   promotion: Promotion | null;
   coupon: Coupon | null;
   couponCode: string | null;
@@ -159,6 +212,8 @@ export function computeBookingPrice(params: {
   couponCode?: string;
   userId: string;
   now?: string;
+  passengers?: Array<{ birthDate?: string | null }>;
+  insurance?: boolean;
 }): { breakdown: PriceBreakdown | null; error: string | null } {
   const now = params.now ?? new Date().toISOString();
 
@@ -166,7 +221,10 @@ export function computeBookingPrice(params: {
     return { breakdown: null, error: "Quantidade inválida." };
   }
 
-  const base = baseTripPrice(params.quantity, params.trip);
+  const ticket = tripsTicket(params.trip, params.quantity, null, params.passengers);
+  const base = ticket.base;
+  const childCount = ticket.childCount;
+  const adultCount = ticket.adultCount;
 
   // 1-2. Promoção elegível de maior benefício (respeitando limite por cliente).
   let promotion: Promotion | null = bestPromotionForTrip(
@@ -174,6 +232,7 @@ export function computeBookingPrice(params: {
     params.trip,
     eligiblePromotions(params.store, params.trip.id, now),
     params.quantity,
+    params.passengers,
   );
   if (promotion?.perUserLimit != null) {
     const usedByUser = params.store.promotionUsages.filter(
@@ -182,7 +241,13 @@ export function computeBookingPrice(params: {
     if (usedByUser >= promotion.perUserLimit) promotion = null;
   }
 
-  let promoDiscount = promotionDiscountAmount(params.store, promotion, params.trip, params.quantity);
+  let promoDiscount = promotionDiscountAmount(
+    params.store,
+    promotion,
+    params.trip,
+    params.quantity,
+    params.passengers,
+  );
 
   // 3. Cupom.
   let coupon: Coupon | null = null;
@@ -228,8 +293,15 @@ export function computeBookingPrice(params: {
     }
   }
 
+  // 5. Seguro viagem: taxa fixa por passageiro, somada APÓS os descontos.
+  const insuranceEnabled = Boolean(params.insurance && params.trip.insuranceEnabled);
+  const insuranceAmount = insuranceEnabled
+    ? round2(params.quantity * params.trip.insurancePrice)
+    : 0;
+  const insuranceCount = insuranceEnabled ? params.quantity : 0;
+
   const discount = round2(promoDiscount + couponDiscount + pixDiscount);
-  const total = Math.max(0, round2(base - discount));
+  const total = Math.max(0, round2(base - discount)) + insuranceAmount;
 
   return {
     breakdown: {
@@ -239,6 +311,10 @@ export function computeBookingPrice(params: {
       pixDiscount,
       discountAmount: discount,
       totalAmount: total,
+      adultCount,
+      childCount,
+      insuranceAmount,
+      insuranceCount,
       promotion,
       coupon,
       couponCode: coupon?.code ?? null,

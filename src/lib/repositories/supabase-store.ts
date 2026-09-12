@@ -356,10 +356,13 @@ export function createSupabaseStoreRepository(): StoreRepository {
 
     for (let i = 0; i < ids.length; i += BATCH_SIZE) {
       const batch = ids.slice(i, i + BATCH_SIZE);
-      const { error } = await supabase
-        .from(config.table)
-        .delete()
-        .in(config.deleteColumn, batch);
+      const { error } = await withRetry(() =>
+        supabase
+          .from(config.table)
+          .delete()
+          .in(config.deleteColumn, batch)
+          .then((r) => r),
+      );
       if (error) throw new Error(`Falha ao remover ${collectionKey}: ${error.message}`);
     }
   }
@@ -369,10 +372,13 @@ export function createSupabaseStoreRepository(): StoreRepository {
     const tripIds = tripRows.map((row) => row.id as string);
     if (tripIds.length === 0) return;
 
-    const { data: existing, error: readError } = await supabase
-      .from("trip_images")
-      .select("id, trip_id, url, sort_order")
-      .in("trip_id", tripIds);
+    const { data: existing, error: readError } = await withRetry(() =>
+      supabase
+        .from("trip_images")
+        .select("id, trip_id, url, sort_order")
+        .in("trip_id", tripIds)
+        .then((r) => r),
+    );
     if (readError) throw new Error(`Falha ao ler trip_images: ${readError.message}`);
 
     const existingById: Record<string, Row> = {};
@@ -392,18 +398,24 @@ export function createSupabaseStoreRepository(): StoreRepository {
     const toDelete = Object.keys(existingById).filter((id) => !keepIds.has(id));
     if (toDelete.length > 0) {
       for (let i = 0; i < toDelete.length; i += BATCH_SIZE) {
-        const { error } = await supabase
-          .from("trip_images")
-          .delete()
-          .in("id", toDelete.slice(i, i + BATCH_SIZE));
+        const { error } = await withRetry(() =>
+          supabase
+            .from("trip_images")
+            .delete()
+            .in("id", toDelete.slice(i, i + BATCH_SIZE))
+            .then((r) => r),
+        );
         if (error) throw new Error(`Falha ao remover trip_images: ${error.message}`);
       }
     }
 
     if (desired.length > 0) {
-      const { error } = await supabase
-        .from("trip_images")
-        .upsert(desired, { onConflict: "id" });
+      const { error } = await withRetry(() =>
+        supabase
+          .from("trip_images")
+          .upsert(desired, { onConflict: "id" })
+          .then((r) => r),
+      );
       if (error) throw new Error(`Falha ao gravar trip_images: ${error.message}`);
     }
   }
@@ -415,10 +427,13 @@ export function createSupabaseStoreRepository(): StoreRepository {
 
     for (let i = 0; i < couponIds.length; i += BATCH_SIZE) {
       const batchIds = couponIds.slice(i, i + BATCH_SIZE);
-      const { error: deleteError } = await supabase
-        .from("coupon_trips")
-        .delete()
-        .in("coupon_id", batchIds);
+      const { error: deleteError } = await withRetry(() =>
+        supabase
+          .from("coupon_trips")
+          .delete()
+          .in("coupon_id", batchIds)
+          .then((r) => r),
+      );
       if (deleteError) throw new Error(`Falha ao remover coupon_trips: ${deleteError.message}`);
 
       const desired: Row[] = [];
@@ -430,7 +445,9 @@ export function createSupabaseStoreRepository(): StoreRepository {
       }
 
       if (desired.length > 0) {
-        const { error } = await supabase.from("coupon_trips").insert(desired);
+        const { error } = await withRetry(() =>
+          supabase.from("coupon_trips").insert(desired).then((r) => r),
+        );
         if (error) throw new Error(`Falha ao gravar coupon_trips: ${error.message}`);
       }
     }
@@ -443,10 +460,13 @@ export function createSupabaseStoreRepository(): StoreRepository {
 
     for (let i = 0; i < promotionIds.length; i += BATCH_SIZE) {
       const batchIds = promotionIds.slice(i, i + BATCH_SIZE);
-      const { error: deleteError } = await supabase
-        .from("promotion_trips")
-        .delete()
-        .in("promotion_id", batchIds);
+      const { error: deleteError } = await withRetry(() =>
+        supabase
+          .from("promotion_trips")
+          .delete()
+          .in("promotion_id", batchIds)
+          .then((r) => r),
+      );
       if (deleteError) throw new Error(`Falha ao remover promotion_trips: ${deleteError.message}`);
 
       const desired: Row[] = [];
@@ -458,7 +478,9 @@ export function createSupabaseStoreRepository(): StoreRepository {
       }
 
       if (desired.length > 0) {
-        const { error } = await supabase.from("promotion_trips").insert(desired);
+        const { error } = await withRetry(() =>
+          supabase.from("promotion_trips").insert(desired).then((r) => r),
+        );
         if (error) throw new Error(`Falha ao gravar promotion_trips: ${error.message}`);
       }
     }
@@ -473,9 +495,12 @@ export function createSupabaseStoreRepository(): StoreRepository {
 
     for (let i = 0; i < rows.length; i += BATCH_SIZE) {
       const batch = rows.slice(i, i + BATCH_SIZE);
-      const { error } = await supabase
-        .from(config.table)
-        .upsert(batch, { onConflict: config.conflictKey });
+      const { error } = await withRetry(() =>
+        supabase
+          .from(config.table)
+          .upsert(batch, { onConflict: config.conflictKey })
+          .then((r) => r),
+      );
       if (error) throw new Error(`Falha ao gravar ${collectionKey}: ${error.message}`);
     }
 
@@ -559,9 +584,12 @@ export function createSupabaseStoreRepository(): StoreRepository {
         } as SettingsRow);
       }
       if (settingsWrites.length > 0) {
-        const { error } = await supabase.from("settings").upsert(settingsWrites as Row[], {
-          onConflict: "key",
-        });
+        const { error } = await withRetry(() =>
+          supabase
+            .from("settings")
+            .upsert(settingsWrites as Row[], { onConflict: "key" })
+            .then((r) => r),
+        );
         if (error) throw new Error(`Falha ao gravar settings: ${error.message}`);
       }
 
@@ -603,6 +631,64 @@ export function createSupabaseStoreRepository(): StoreRepository {
       }
 
       return result;
+    },
+
+    async findResumableBookingId({
+      customerId,
+      tripId,
+      paymentPlan,
+      quantity,
+      cpfMultiset,
+    }) {
+      const { data: candidates, error } = await withRetry(() =>
+        supabase
+          .from("bookings")
+          .select("id, reference, client_request_id")
+          .eq("customer_id", customerId)
+          .eq("trip_id", tripId)
+          .eq("status", "PENDENTE")
+          .eq("payment_plan", paymentPlan)
+          .eq("quantity", quantity)
+          .limit(5)
+          .then((r) => r),
+      );
+      if (error) throw new Error(`Falha ao buscar reserva retomável: ${error.message}`);
+      if (!candidates || candidates.length === 0) return null;
+
+      const ids = (candidates as Row[]).map((c) => c.id as string);
+      const { data: passengers, error: passengerError } = await withRetry(() =>
+        supabase
+          .from("booking_passengers")
+          .select("booking_id, cpf")
+          .in("booking_id", ids)
+          .then((r) => r),
+      );
+      if (passengerError) {
+        throw new Error(
+          `Falha ao buscar passageiros da reserva retomável: ${passengerError.message}`,
+        );
+      }
+
+      const digitsByBooking = new Map<string, string[]>();
+      for (const row of (passengers ?? []) as Array<{ booking_id: string; cpf: string | null }>) {
+        const digits = (row.cpf ?? "").replace(/\D/g, "");
+        const list = digitsByBooking.get(row.booking_id) ?? [];
+        list.push(digits);
+        digitsByBooking.set(row.booking_id, list);
+      }
+
+      for (const candidate of candidates as Row[]) {
+        const id = candidate.id as string;
+        const existingSet = (digitsByBooking.get(id) ?? []).sort().join(",");
+        if (existingSet === cpfMultiset) {
+          return {
+            id,
+            reference: (candidate.reference as string) ?? "",
+            clientRequestId: (candidate.client_request_id as string | null) ?? null,
+          };
+        }
+      }
+      return null;
     },
   };
 }

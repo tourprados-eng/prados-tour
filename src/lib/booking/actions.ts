@@ -9,8 +9,8 @@ import { getSession, canAccess } from "@/lib/auth/session";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import { isValidCpf, onlyDigits } from "@/lib/utils";
 import { canAccessRole } from "@/lib/roles";
-import { computeBookingPrice } from "@/lib/pricing";
-import type { Payment, PaymentMethod, PaymentPlan } from "@/types";
+import { computeBookingPrice, passengerCategory } from "@/lib/pricing";
+import type { DataStore, Payment, PaymentMethod, PaymentPlan, Trip } from "@/types";
 import {
   createAsaasPixPayment,
   findAsaasPaymentByExternalReference,
@@ -21,6 +21,7 @@ import {
   acquirePixClaim,
   completePixClaim,
   getPixClaim,
+  releasePixClaim,
   takeoverExpiredClaim,
   updatePixClaim,
   type PaymentClaim,
@@ -47,6 +48,8 @@ export type CheckoutInput = {
   clientRequestId?: string;
   /** E-mail do responsável pela compra (validado; contato usa o e-mail da conta). */
   responsibleEmail?: string;
+  /** Seguro viagem para todos os passageiros (quando habilitado na viagem). */
+  insurance?: boolean;
 };
 
 const birthDateSchema = z.string().refine((value) => {
@@ -98,10 +101,33 @@ export async function createBookingAction(input: CheckoutInput) {
   }
 
   const isPixPayment = input.paymentMethod === "PIX";
-  const paymentId = isPixPayment ? pixPaymentId(input, session.id) : uuid();
+  let paymentId = isPixPayment ? pixPaymentId(input, session.id) : uuid();
+  let claimWon = false;
 
   if (isPixPayment) {
+    // Retoma uma reserva PENDENTE já existente para esta viagem com o MESMO
+    // conjunto de passageiros (CPFs) e plano, caso uma tentativa anterior
+    // tenha criado a reserva mas falhado na cobrança. Isso evita reservas
+    // duplicadas no retry E deriva o MESMO paymentId da operação original,
+    // permitindo reconcile-first exato no Asaas (sem cobrança duplicada).
+    // A transação revalida o resume com um read fresco (regra de idempotência).
+    const cpfMultiset = passengerCpfMultiset(input.passengers);
+    const resumable = await getRepositoryRuntime().findResumableBookingId({
+      customerId: session.id,
+      tripId: input.tripId,
+      paymentPlan: input.paymentPlan,
+      quantity: input.quantity,
+      cpfMultiset,
+    });
+
+    if (resumable) {
+      paymentId = resumable.clientRequestId
+        ? pixPaymentIdFromClientRequestId(resumable.clientRequestId)
+        : pixPaymentIdFromBookingId(resumable.id);
+    }
+
     const gate = await gatePixClaim(paymentId, session.id, input.tripId);
+    claimWon = gate.proceed;
 
     if (!gate.proceed) {
       const completedId =
@@ -117,6 +143,9 @@ export async function createBookingAction(input: CheckoutInput) {
         if (adopted.ok) {
           redirect(`/checkout/sucesso?booking=${completedId}`);
         }
+        if (claimWon === false) {
+          await releasePixClaim(paymentId).catch(() => undefined);
+        }
         return {
           error:
             adopted.message ??
@@ -129,10 +158,12 @@ export async function createBookingAction(input: CheckoutInput) {
       };
     }
 
-    if (gate.resumeBookingId) {
+    if (gate.resumeBookingId && !outcome) {
       const store = await getRepositoryRuntime().read();
-      const existing = store.bookings.find((b) => b.id === gate.resumeBookingId);
-      if (existing && existing.tripId === input.tripId) {
+      const existing = store.bookings.find(
+        (b) => b.id === gate.resumeBookingId && b.tripId === input.tripId,
+      );
+      if (existing && existing.customerId === session.id) {
         outcome = { bookingId: existing.id, reference: existing.reference };
       }
     }
@@ -152,17 +183,21 @@ export async function createBookingAction(input: CheckoutInput) {
         throw new Error("Quantidade de passageiros inválida.");
       }
 
-      // Idempotência: mesma viagem + cliente + requisição (ou reserva recente
-      // idêntica) retorna a reserva já criada, sem duplicar no refresh/retry.
-      const recentWindow = new Date(Date.now() - 60_000).toISOString();
+      // Idempotência/retomada: (1) mesmo clientRequestId, ou (2) reserva
+      // PENDENTE da mesma viagem/plano/quantidade para o MESMO conjunto de
+      // passageiros (CPFs). Impede duplicação em refresh/retry mesmo após
+      // falha parcial (reserva criada sem cobrança): o retry retoma a reserva
+      // original em vez de criar outra.
+      const cpfMultiset = passengerCpfMultiset(input.passengers);
       const existing = store.bookings.find(
         (b) =>
           b.customerId === session.id &&
           b.tripId === trip.id &&
           ((input.clientRequestId && b.clientRequestId === input.clientRequestId) ||
             (b.status === "PENDENTE" &&
-              b.createdAt >= recentWindow &&
-              b.quantity === input.quantity)),
+              b.paymentPlan === input.paymentPlan &&
+              b.quantity === input.quantity &&
+              bookingPassengerCpfMultiset(store, b.id) === cpfMultiset)),
       );
       if (existing) {
         return { bookingId: existing.id, reference: existing.reference };
@@ -209,6 +244,8 @@ export async function createBookingAction(input: CheckoutInput) {
         paymentPlan: input.paymentPlan,
         couponCode: input.couponCode,
         userId: session.id,
+        passengers: input.passengers,
+        insurance: input.insurance,
       });
       if (pricing.error) throw new Error(pricing.error);
       if (!pricing.breakdown) throw new Error("Erro ao calcular o valor da reserva.");
@@ -226,7 +263,7 @@ export async function createBookingAction(input: CheckoutInput) {
       }
 
       const now = new Date().toISOString();
-      const reference = `PT${String(store.bookings.length + 1).padStart(6, "0")}`;
+      const reference = nextBookingReference(store.bookings);
       const bookingId = uuid();
 
       let sellerId: string | null = null;
@@ -271,6 +308,9 @@ export async function createBookingAction(input: CheckoutInput) {
         promotionDiscount: price.promoDiscount,
         couponDiscount: price.couponDiscount,
         pixDiscount: price.pixDiscount,
+        childCount: price.childCount,
+        insuranceCount: price.insuranceCount,
+        insuranceAmount: price.insuranceAmount,
         paymentPlan: input.paymentPlan,
         status: "PENDENTE",
         clientRequestId: input.clientRequestId ?? null,
@@ -279,8 +319,15 @@ export async function createBookingAction(input: CheckoutInput) {
         updatedAt: now,
       });
 
+      const orderPrices = passengerPricesForBooking(trip, input.passengers);
+      const withInsurance = Boolean(input.insurance && trip.insuranceEnabled);
+
       for (const p of input.passengers) {
         const seatId: string | null = null;
+        const pricingForPassenger = orderPrices.shift() ?? {
+          price: trip.pricePerson,
+          category: "ADULTO" as const,
+        };
 
         store.passengers.push({
           id: uuid(),
@@ -292,6 +339,9 @@ export async function createBookingAction(input: CheckoutInput) {
           seatId,
           boardingPointId: boarding.id,
           seatGroup: p.seatGroup ?? null,
+          price: pricingForPassenger.price,
+          priceCategory: pricingForPassenger.category,
+          insurance: withInsurance,
           seatAssignmentStatus: "PENDENTE",
         });
       }
@@ -449,6 +499,11 @@ export async function createBookingAction(input: CheckoutInput) {
       return { bookingId, reference };
       });
     } catch (e) {
+      // Falhou antes de completar a reserva: libera a claim imediatamente
+      // para que o retry possa reprocessar sem esperar o lease expirar.
+      if (isPixPayment && claimWon) {
+        await releasePixClaim(paymentId).catch(() => undefined);
+      }
       return { error: e instanceof Error ? e.message : "Erro ao criar reserva." };
     }
   }
@@ -475,10 +530,19 @@ export async function createBookingAction(input: CheckoutInput) {
     redirect(`/checkout/sucesso?booking=${bookingId}`);
   }
 
+  // A reserva EXISTE, mas o PIX não pôde ser gerado agora. Libera a claim para
+  // que o retry (que retoma a mesma reserva pela regra de idempotência) possa
+  // reprocessar imediatamente, sem esperar o lease expirar.
+  if (claimWon) {
+    await releasePixClaim(paymentId).catch(() => undefined);
+  }
+
   return {
     error:
       pix.message ??
       "Não foi possível gerar o PIX agora. Sua reserva foi criada e você pode tentar novamente.",
+    bookingId,
+    reference,
   };
 }
 
@@ -492,6 +556,8 @@ export async function previewBookingPriceAction(input: {
   paymentMethod: PaymentMethod;
   paymentPlan: PaymentPlan;
   couponCode?: string;
+  birthDates?: Array<string | null>;
+  insurance?: boolean;
 }): Promise<
   | {
       baseAmount: number;
@@ -499,6 +565,10 @@ export async function previewBookingPriceAction(input: {
       couponDiscount: number;
       pixDiscount: number;
       totalAmount: number;
+      adultCount: number;
+      childCount: number;
+      insuranceCount: number;
+      insuranceAmount: number;
       promotionName: string | null;
       couponCode: string | null;
     }
@@ -521,6 +591,8 @@ export async function previewBookingPriceAction(input: {
     paymentPlan: input.paymentPlan,
     couponCode: input.couponCode,
     userId: session.id,
+    passengers: (input.birthDates ?? []).map((birthDate) => ({ birthDate })),
+    insurance: input.insurance,
   });
   if (pricing.error || !pricing.breakdown) {
     return { error: pricing.error ?? "Erro ao calcular o valor." };
@@ -533,6 +605,10 @@ export async function previewBookingPriceAction(input: {
     couponDiscount: b.couponDiscount,
     pixDiscount: b.pixDiscount,
     totalAmount: b.totalAmount,
+    adultCount: b.adultCount,
+    childCount: b.childCount,
+    insuranceCount: b.insuranceCount,
+    insuranceAmount: b.insuranceAmount,
     promotionName: b.promotion?.name ?? null,
     couponCode: b.couponCode,
   };
@@ -638,6 +714,11 @@ export async function getTripBySlug(slug: string) {
   };
 }
 
+function pixPaymentIdFromKey(key: string): string {
+  const hex = createHash("md5").update(key).digest("hex").slice(0, 32);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
+
 function pixPaymentId(input: CheckoutInput, customerId: string): string {
   const key = input.clientRequestId
     ? `payment-pix|${input.clientRequestId}`
@@ -645,12 +726,87 @@ function pixPaymentId(input: CheckoutInput, customerId: string): string {
         .map((p) => onlyDigits(p.cpf))
         .sort()
         .join(",")}`;
-  const hex = createHash("md5").update(key).digest("hex").slice(0, 32);
-  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+  return pixPaymentIdFromKey(key);
+}
+
+function pixPaymentIdFromClientRequestId(clientRequestId: string): string {
+  return pixPaymentIdFromKey(`payment-pix|${clientRequestId}`);
+}
+
+function pixPaymentIdFromBookingId(bookingId: string): string {
+  return pixPaymentIdFromKey(`payment-pix|booking:${bookingId}`);
+}
+
+function passengerCpfMultiset(passengers: Array<{ cpf: string }>): string {
+  return passengers
+    .map((p) => onlyDigits(p.cpf))
+    .sort()
+    .join(",");
+}
+
+function bookingPassengerCpfMultiset(
+  store: DataStore,
+  bookingId: string,
+): string {
+  return store.passengers
+    .filter((p) => p.bookingId === bookingId)
+    .map((p) => onlyDigits(p.cpf ?? ""))
+    .sort()
+    .join(",");
+}
+
+/**
+ * Preços base por passageiro, na ordem de entrada: adultos pagam pessoa/dupla
+ * (pares ganham o preço de casal, dividido igualmente) e crianças pagam
+ * `trip.childPrice` (ou pessoa, se não configurado). Reflete exatamente o
+ * `baseAmount` calculado pelo motor de preços.
+ */
+function passengerPricesForBooking(
+  trip: Trip,
+  passengers: Array<{ birthDate?: string | null }>,
+): Array<{ price: number; category: "ADULTO" | "CRIANCA" }> {
+  const personPrice = trip.pricePerson;
+  const couplePrice = trip.priceCouple ?? personPrice * 2;
+  const childPrice = trip.childPrice ?? personPrice;
+
+  const adults = passengers.filter(
+    (p) =>
+      passengerCategory(p.birthDate, trip.date, trip.childMaxAge) === "ADULTO",
+  ).length;
+
+  let adultIndex = 0;
+  return passengers.map((p) => {
+    const isChild =
+      passengerCategory(p.birthDate, trip.date, trip.childMaxAge) === "CRIANCA";
+    if (isChild) {
+      return { price: childPrice, category: "CRIANCA" as const };
+    }
+    const isOddSingle = adults % 2 === 1 && adultIndex === adults - 1;
+    const price = isOddSingle
+      ? personPrice
+      : Math.round((couplePrice / 2) * 100) / 100;
+    adultIndex += 1;
+    return { price, category: "ADULTO" as const };
+  });
+}
+
+/**
+ * Próxima referência de reserva na forma PT######. Derivada do MAIOR valor
+ * numérico já usado (e não apenas da contagem) para ser monotônica mesmo com
+ * exclusões administrativas, reservas demo (E2EWB001) ou concorrência — e
+ * para reduzir colisões com a UNIQUE de bookings.reference.
+ */
+function nextBookingReference(bookings: Array<{ reference: string }>): string {
+  const maxNumeric = bookings.reduce((max, b) => {
+    const match = /^PT(\d+)$/.exec(b.reference ?? "");
+    return match ? Math.max(max, Number(match[1])) : max;
+  }, 0);
+  const next = Math.max(maxNumeric + 1, bookings.length + 1);
+  return `PT${String(next).padStart(6, "0")}`;
 }
 
 const PIX_CLAIM_WAIT_MS = 300;
-const PIX_CLAIM_WAIT_ATTEMPTS = 15;
+const PIX_CLAIM_WAIT_ATTEMPTS = 30;
 
 type PixClaimGate = {
   proceed: boolean;
@@ -665,6 +821,7 @@ type PixClaimGate = {
  * - quem ganha: prossegue para o transaction da reserva;
  * - perdedor: espera a operação original (lease curta); se a lease expirou,
  *   faz take-over condicional (CAS) e retoma do checkpoint existente;
+ *   se a claim SUMIR (vencedor falhou e liberou), re-adquire e prossegue.
  * - claim já CHARGED: não recria a cobrança; devolve a reserva para adoção.
  */
 async function gatePixClaim(
@@ -672,13 +829,25 @@ async function gatePixClaim(
   customerId: string,
   tripId: string,
 ): Promise<PixClaimGate> {
-  let acquired = await acquirePixClaim({ key: paymentId, customerId, tripId });
+  let acquired: { won: boolean; claim: PaymentClaim | undefined } =
+    await acquirePixClaim({ key: paymentId, customerId, tripId });
   let attempt = 0;
 
   while (!acquired.won) {
     const claim = acquired.claim;
     if (!claim) {
-      return { proceed: false, message: "Não foi possível iniciar o PIX. Tente novamente." };
+      // A claim foi liberada pelo vencedor que falhou: adquire de novo e
+      // prossegue (a transação é idempotente por CPFs — sem duplicação).
+      const retried = await acquirePixClaim({ key: paymentId, customerId, tripId });
+      if (retried.won) {
+        return {
+          proceed: true,
+          claim: retried.claim,
+          resumeBookingId: retried.claim?.bookingId ?? undefined,
+        };
+      }
+      acquired = { won: false, claim: retried.claim };
+      continue;
     }
     if (claim.status === "CHARGED") {
       return { proceed: false, claim };
@@ -709,7 +878,7 @@ async function gatePixClaim(
     attempt += 1;
     await new Promise((resolve) => setTimeout(resolve, PIX_CLAIM_WAIT_MS));
     const latest = await getPixClaim(paymentId);
-    acquired = { won: false, claim: latest ?? claim };
+    acquired = { won: false, claim: latest ?? undefined };
   }
 
   return {
@@ -820,38 +989,51 @@ async function ensureAsaasPixPayment(
   }
 
   if (!chargeId) {
-    const asaasCustomer = await getOrCreateAsaasCustomer({
-      name: profile.fullName,
-      cpfCnpj: profile.cpf,
-      email: opts.responsibleEmail?.trim() || profile.email,
-      mobilePhone: onlyDigits(profile.phone ?? profile.whatsapp ?? ""),
-      externalReference: `pt-customer-${booking.customerId}`,
-    });
+    try {
+      const asaasCustomer = await getOrCreateAsaasCustomer({
+        name: profile.fullName,
+        cpfCnpj: profile.cpf,
+        email: opts.responsibleEmail?.trim() || profile.email,
+        mobilePhone: onlyDigits(profile.phone ?? profile.whatsapp ?? ""),
+        externalReference: `pt-customer-${booking.customerId}`,
+      });
 
-    const created = await createAsaasPixPayment({
-      customer: asaasCustomer.id,
-      billingType: "PIX",
-      value: amount,
-      dueDate: installment1?.dueDate ?? new Date().toISOString().slice(0, 10),
-      description: `Reserva ${booking.reference} - ${trip.name}`.slice(0, 120),
-      externalReference,
-    }).catch(async () => {
-      try {
-        return (await findAsaasPaymentByExternalReference(externalReference)) ?? null;
-      } catch {
-        return null;
+      const created = await createAsaasPixPayment({
+        customer: asaasCustomer.id,
+        billingType: "PIX",
+        value: amount,
+        dueDate: installment1?.dueDate ?? new Date().toISOString().slice(0, 10),
+        description: `Reserva ${booking.reference} - ${trip.name}`.slice(0, 120),
+        externalReference,
+      }).catch(async () => {
+        try {
+          return (await findAsaasPaymentByExternalReference(externalReference)) ?? null;
+        } catch {
+          return null;
+        }
+      });
+
+      if (created) {
+        chargeId = created.id;
+        await updatePixClaim(paymentId, { chargeId, bookingId }).catch(() => undefined);
       }
-    });
-
-    if (!created) {
+    } catch {
+      // Falha de conexão/criação no Asaas: a reserva e a claim são preservadas
+      // para retry seguro (clientRequestId/claim). Não estoura para a action.
       return {
         ok: false,
         message:
           "Não foi possível gerar o PIX neste momento. Sua reserva foi criada e você poderá tentar novamente em instantes.",
       };
     }
-    chargeId = created.id;
-    await updatePixClaim(paymentId, { chargeId, bookingId }).catch(() => undefined);
+  }
+
+  if (!chargeId) {
+    return {
+      ok: false,
+      message:
+        "Não foi possível gerar o PIX neste momento. Sua reserva foi criada e você poderá tentar novamente em instantes.",
+    };
   }
 
   let payload = payment?.pixCopyPaste ?? null;

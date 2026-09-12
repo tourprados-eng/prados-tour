@@ -13,6 +13,13 @@ export type RepositoryRuntime = {
   repository: StoreRepository;
   read(): Promise<DataStore>;
   transaction<T>(mutator: (store: DataStore) => T | Promise<T>): Promise<T>;
+  findResumableBookingId(args: {
+    customerId: string;
+    tripId: string;
+    paymentPlan: import("@/types").PaymentPlan;
+    quantity: number;
+    cpfMultiset: string;
+  }): Promise<{ id: string; reference: string; clientRequestId: string | null } | null>;
   getCollection<K extends CollectionKey>(key: K): Promise<DataStore[K]>;
   getProfiles(): Promise<DataStore["profiles"]>;
   getTrips(): Promise<DataStore["trips"]>;
@@ -63,6 +70,7 @@ export function getRepositoryRuntime(): RepositoryRuntime {
     repository,
     read: () => repository.read(),
     transaction: (mutator) => repository.transaction(mutator),
+    findResumableBookingId: (args) => repository.findResumableBookingId(args),
     getCollection: (key) => repository.read().then((store) => store[key]),
     getProfiles: () => repository.read().then((s) => s.profiles),
     getTrips: () => repository.read().then((s) => s.trips),

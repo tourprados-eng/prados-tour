@@ -342,3 +342,28 @@ export async function completePixClaim(
     existing.updated_at = now;
   }
 }
+
+/**
+ * Libera a claim (remove a linha). Usado quando a OPERAÇÃO falha de forma
+ * definitiva no lado da aplicação (transação ou criação da cobrança): libera
+ * a chave imediatamente, sem esperar o lease expirar, para que o retry
+ * adquira uma claim nova e reprocesse com segurança. Seguro porque a
+ * transação da reserva é idempotente (dedupe por conjunto de CPFs) e o Asaas
+ * é reconciliado primeiro (reconcile-first por externalReference).
+ */
+export async function releasePixClaim(key: string): Promise<void> {
+  const db = getDbClient();
+  if (db) {
+    try {
+      const { error } = await db
+        .from("payment_claims")
+        .delete()
+        .eq("idempotency_key", key);
+      if (error) throw error;
+      return;
+    } catch (error) {
+      if (!isMissingTableError(error)) throw error;
+    }
+  }
+  memoryClaims.delete(key);
+}

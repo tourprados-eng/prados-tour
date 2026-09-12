@@ -5,6 +5,7 @@ import { createBookingAction, previewBookingPriceAction } from "@/lib/booking/ac
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/form";
 import { formatCurrency, isValidCpf } from "@/lib/utils";
+import { passengerCategory } from "@/lib/pricing";
 import { SELLER_CODE_STORAGE_KEY } from "@/components/layout/seller-tracker";
 import type { BoardingPoint, Trip } from "@/types";
 
@@ -14,6 +15,10 @@ type PricePreview = {
   couponDiscount: number;
   pixDiscount: number;
   totalAmount: number;
+  adultCount: number;
+  childCount: number;
+  insuranceCount: number;
+  insuranceAmount: number;
   promotionName: string | null;
   couponCode: string | null;
 };
@@ -105,6 +110,7 @@ export function CheckoutWizard({
   const [couponCode, setCouponCode] = useState("");
   const [sellerCode, setSellerCode] = useState("");
   const [sellerFromLink, setSellerFromLink] = useState(false);
+  const [insurance, setInsurance] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [pending, startTransition] = useTransition();
   const [price, setPrice] = useState<PricePreview | null>(null);
@@ -116,6 +122,8 @@ export function CheckoutWizard({
   );
   const submitted = useRef(false);
   const [responsibleEmail, setResponsibleEmail] = useState(defaultEmail);
+  const [failedBookingId, setFailedBookingId] = useState<string | null>(null);
+  const [failedBookingRef, setFailedBookingRef] = useState<string | null>(null);
   const [passengers, setPassengers] = useState<PassengerDraft[]>([
     {
       name: defaultName,
@@ -149,6 +157,8 @@ export function CheckoutWizard({
         paymentMethod: method,
         paymentPlan: method === "CARTAO" ? "TOTAL" : plan,
         couponCode: couponCode.trim() ? couponCode.trim() : undefined,
+        birthDates: passengers.map((p) => p.birthDate || null),
+        insurance,
       });
       if (!active) return;
       if (!result) return;
@@ -162,7 +172,7 @@ export function CheckoutWizard({
       active = false;
       clearTimeout(timer);
     };
-  }, [trip.id, quantity, method, plan, couponCode, trip]);
+  }, [trip.id, quantity, method, plan, couponCode, trip, passengers, insurance]);
 
   const base = useMemo(() => price?.baseAmount ?? null, [price]);
   const discount = price ? price.promoDiscount + price.couponDiscount + price.pixDiscount : 0;
@@ -210,28 +220,42 @@ export function CheckoutWizard({
     setError(null);
     submitted.current = true;
     startTransition(async () => {
-      const result = await createBookingAction({
-        tripId: trip.id,
-        quantity,
-        boardingPointId,
-        paymentMethod: method,
-        paymentPlan: method === "CARTAO" ? "TOTAL" : plan,
-        installmentCount: method === "CARTAO" ? installments : undefined,
-        couponCode: couponCode || undefined,
-        sellerCode: sellerCode || undefined,
-        clientRequestId: requestId.current,
-        responsibleEmail: responsibleEmail || undefined,
-        passengers: passengers.map((p) => ({
-          name: p.name,
-          cpf: p.cpf,
-          birthDate: p.birthDate,
-          phone: p.phone,
-          seatGroup: p.seatGroup,
-        })),
-      });
+      let result: Awaited<ReturnType<typeof createBookingAction>>;
+      try {
+        result = await createBookingAction({
+          tripId: trip.id,
+          quantity,
+          boardingPointId,
+          paymentMethod: method,
+          paymentPlan: method === "CARTAO" ? "TOTAL" : plan,
+          installmentCount: method === "CARTAO" ? installments : undefined,
+          couponCode: couponCode || undefined,
+          sellerCode: sellerCode || undefined,
+          clientRequestId: requestId.current,
+          responsibleEmail: responsibleEmail || undefined,
+          insurance,
+          passengers: passengers.map((p) => ({
+            name: p.name,
+            cpf: p.cpf,
+            birthDate: p.birthDate,
+            phone: p.phone,
+            seatGroup: p.seatGroup,
+          })),
+        });
+      } catch {
+        submitted.current = false;
+        setError(
+          "Não foi possível concluir a reserva agora. Sua reserva, se criada, permanece salva; tente novamente em instantes.",
+        );
+        return;
+      }
       if (result?.error) {
         submitted.current = false;
         setError(result.error);
+        if (method === "PIX" && result?.bookingId) {
+          setFailedBookingId(result.bookingId);
+          setFailedBookingRef(result.reference ?? null);
+        }
         return;
       }
 
@@ -325,12 +349,26 @@ export function CheckoutWizard({
           <div className="space-y-6">
             {passengers.map((p, idx) => {
               const fieldError = validatePassenger(p);
+              const passengerType = p.birthDate
+                ? passengerCategory(p.birthDate, trip.date, trip.childMaxAge)
+                : null;
               return (
                 <div key={idx} className="grid gap-3 sm:grid-cols-2">
-                  <p className="sm:col-span-2 font-semibold text-[#2F2328]">
+                  <p className="sm:col-span-2 flex flex-wrap items-center gap-2 font-semibold text-[#2F2328]">
                     {idx === 0
                       ? "Responsável pela compra"
                       : `Quem vai viajar junto — Passageiro ${idx + 1}`}
+                    {passengerType && (
+                      <span
+                        className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide ${
+                          passengerType === "CRIANCA"
+                            ? "bg-[#fff3dd] text-[#b45f06]"
+                            : "bg-[#e8f5ec] text-[#2e7d46]"
+                        }`}
+                      >
+                        {passengerType === "CRIANCA" ? "Criança" : "Adulto"}
+                      </span>
+                    )}
                   </p>
                   {idx === 0 && (
                     <p className="sm:col-span-2 -mt-2 text-xs text-[#8A7A82]">
@@ -539,6 +577,24 @@ export function CheckoutWizard({
                 </p>
               )}
             </div>
+            {trip.insuranceEnabled && (
+              <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-[#EBE4E7] bg-[#FAF7F8] p-4">
+                <input
+                  type="checkbox"
+                  checked={insurance}
+                  onChange={(e) => setInsurance(e.target.checked)}
+                  className="h-5 w-5 accent-[#E84C91]"
+                />
+                <div>
+                  <p className="text-sm font-semibold text-[#2F2328]">
+                    Adicionar seguro viagem — {formatCurrency(trip.insurancePrice)}/pessoa
+                  </p>
+                  <p className="mt-1 text-xs text-[#8A7A82]">
+                    Cobertura para todos os {quantity} passageiro{quantity === 1 ? "" : "s"} durante a viagem.
+                  </p>
+                </div>
+              </label>
+            )}
             <div>
               <Label>Código do vendedor (opcional)</Label>
               {sellerFromLink && sellerCode && (
@@ -610,6 +666,12 @@ export function CheckoutWizard({
                       <span>-{formatCurrency(discount)}</span>
                     </div>
                   )}
+                  {price && price.insuranceAmount > 0 && (
+                    <div className="flex items-center justify-between gap-3 text-sm text-[#6B5B63]">
+                      <span>Seguro viagem ({price.insuranceCount} passageiro{price.insuranceCount === 1 ? "" : "s"})</span>
+                      <span>+{formatCurrency(price.insuranceAmount)}</span>
+                    </div>
+                  )}
                 </>
               )}
               <p className="mt-2 text-xl font-bold text-[#2F2328]">
@@ -652,6 +714,31 @@ export function CheckoutWizard({
           <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
             {error}
           </p>
+        )}
+
+        {failedBookingId && (
+          <div className="mt-4 rounded-xl bg-amber-50 px-3 py-3 text-sm text-amber-900">
+            <p className="font-semibold">
+              Reserva {failedBookingRef ? `criada (${failedBookingRef})` : "criada"}.
+            </p>
+            <p className="mt-0.5">
+              O PIX ainda não pôde ser gerado. Tente novamente — a mesma
+              reserva será retomada — ou veja em Minhas viagens.
+            </p>
+            <div className="mt-2 flex flex-wrap gap-2">
+              <Button
+                type="button"
+                size="sm"
+                onClick={submit}
+                disabled={pending}
+              >
+                {pending ? "Processando..." : "Tentar gerar o PIX novamente"}
+              </Button>
+              <Button type="button" size="sm" variant="ghost" href="/minhas-viagens">
+                Ver em Minhas viagens
+              </Button>
+            </div>
+          </div>
         )}
 
         <div className="mt-8 flex flex-wrap items-center justify-between gap-3">

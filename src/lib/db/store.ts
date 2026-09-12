@@ -11,6 +11,30 @@ const BACKUP_DIR = process.env.LOCAL_STORE_BACKUP_DIR?.trim();
 function normalizeStore(store: DataStore): DataStore {
   store.promotions ??= [];
   store.promotionUsages ??= [];
+
+  // Normaliza viagens com campos novos (compatibilidade com store.json antigo).
+  for (const trip of store.trips ?? []) {
+    trip.childPrice ??= null;
+    trip.childMaxAge ??= null;
+    trip.insuranceEnabled ??= false;
+    trip.insurancePrice ??= 20;
+    trip.transportPolicy ??= null;
+  }
+
+  // Normaliza passageiros com campos novos.
+  for (const passenger of store.passengers ?? []) {
+    passenger.price ??= null;
+    passenger.priceCategory ??= null;
+    passenger.insurance ??= false;
+  }
+
+  // Normaliza reservas com campos novos.
+  for (const booking of store.bookings ?? []) {
+    booking.childCount ??= 0;
+    booking.insuranceCount ??= 0;
+    booking.insuranceAmount ??= 0;
+  }
+
   store.promoBanner ??= {
     title: "Ofertas e promoções",
     subtitle: "Condições especiais por tempo limitado",

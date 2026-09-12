@@ -678,6 +678,26 @@ function reconcileTripSeats(
   }
 }
 
+/**
+ * Gera um slug único para uma viagem nova, respeitando a UNIQUE(slug) do banco.
+ * Prioriza o slug puro derivado do nome; em caso de colisão com outra viagem,
+ * apende a data da viagem; se ainda colidir (mesmo nome e mesma data), apende
+ * sufixos numéricos (-2, -3, ...). Usa todas as viagens do store (inclusive
+ * excluídas) para nunca violar a constraint no Supabase.
+ */
+function uniqueTripSlug(baseSlug: string, date: string, existing: Trip[]): string {
+  const taken = new Set(existing.map((trip) => trip.slug));
+  if (!taken.has(baseSlug)) return baseSlug;
+
+  const dated = `${baseSlug}-${date}`;
+  if (!taken.has(dated)) return dated;
+
+  for (let suffix = 2; ; suffix++) {
+    const candidate = `${dated}-${suffix}`;
+    if (!taken.has(candidate)) return candidate;
+  }
+}
+
 export async function upsertTrip(data: {
   id?: string;
   name: string;
@@ -690,6 +710,11 @@ export async function upsertTrip(data: {
   returnDate?: string;
   pricePerson: number;
   priceCouple: number;
+  childPrice?: number | null;
+  childMaxAge?: number | null;
+  insuranceEnabled?: boolean;
+  insurancePrice?: number;
+  transportPolicy?: string;
   totalSeats: number;
   description: string;
   itinerary: string;
@@ -781,6 +806,11 @@ export async function upsertTrip(data: {
         returnDate: data.returnDate?.trim() ? data.returnDate : null,
         pricePerson: data.pricePerson,
         priceCouple: data.priceCouple,
+        childPrice: data.childPrice ?? null,
+        childMaxAge: data.childMaxAge ?? null,
+        insuranceEnabled: data.insuranceEnabled ?? false,
+        insurancePrice: data.insurancePrice ?? 20,
+        transportPolicy: data.transportPolicy?.trim() || null,
         totalSeats: data.totalSeats,
         description: data.description,
         itinerary: data.itinerary,
@@ -832,7 +862,7 @@ export async function upsertTrip(data: {
       const trip: Trip = {
         id,
         name: data.name,
-        slug: slugify(data.name),
+        slug: uniqueTripSlug(slugify(data.name), data.date, store.trips),
         destination: data.destination,
         category: data.category,
         date: data.date,
@@ -842,6 +872,11 @@ export async function upsertTrip(data: {
         returnDate: data.returnDate?.trim() ? data.returnDate : null,
         pricePerson: data.pricePerson,
         priceCouple: data.priceCouple,
+        childPrice: data.childPrice ?? null,
+        childMaxAge: data.childMaxAge ?? null,
+        insuranceEnabled: data.insuranceEnabled ?? false,
+        insurancePrice: data.insurancePrice ?? 20,
+        transportPolicy: data.transportPolicy?.trim() || null,
         totalSeats: data.totalSeats,
         description: data.description,
         itinerary: data.itinerary,
@@ -850,6 +885,8 @@ export async function upsertTrip(data: {
         rules: data.rules,
         cancellationPolicy: data.cancellationPolicy,
         status: data.status,
+        formUrl: data.formUrl?.trim() || undefined,
+        formRequired: data.formUrl ? data.formRequired !== false : false,
         images:
           data.imageUrls !== undefined
             ? data.imageUrls

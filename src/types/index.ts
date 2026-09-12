@@ -55,6 +55,11 @@ export interface Trip {
   returnDate?: string | null;
   pricePerson: number;
   priceCouple: number | null;
+  childPrice: number | null;
+  childMaxAge: number | null;
+  insuranceEnabled: boolean;
+  insurancePrice: number;
+  transportPolicy: string | null;
   totalSeats: number;
   description: string;
   itinerary: string;
@@ -125,6 +130,9 @@ export interface Booking {
   promotionDiscount?: number;
   couponDiscount?: number;
   pixDiscount?: number;
+  childCount: number;
+  insuranceCount: number;
+  insuranceAmount: number;
   clientRequestId?: string | null;
   createdAt: string;
   updatedAt: string;
@@ -140,6 +148,9 @@ export interface BookingPassenger {
   seatId: string | null;
   boardingPointId: string | null;
   seatGroup: string | null;
+  price: number | null;
+  priceCategory: "ADULTO" | "CRIANCA" | null;
+  insurance: boolean;
   seatAssignmentStatus: "PENDENTE" | "ATRIBUIDO" | "MANUAL";
 }
 

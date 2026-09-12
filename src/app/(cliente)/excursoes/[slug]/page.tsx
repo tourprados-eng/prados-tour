@@ -1,4 +1,5 @@
 import { notFound } from "next/navigation";
+import Link from "next/link";
 import { existsSync } from "fs";
 import path from "path";
 import { getTripBySlug } from "@/lib/booking/actions";
@@ -111,6 +112,20 @@ export default async function TripDetailPage({
               <p className="mt-1 text-sm text-brand-muted">
                 Dupla: {formatCurrency(promo ? promo.couplePrice : trip.priceCouple ?? trip.pricePerson * 2)}
               </p>
+              {trip.childMaxAge != null && trip.childPrice != null && (
+                <p className="mt-1 text-sm text-brand-muted">
+                  Criança{" "}
+                  {trip.childMaxAge === 0
+                    ? ""
+                    : `(até ${trip.childMaxAge} ano${trip.childMaxAge === 1 ? "" : "s"})`}
+                  : {formatCurrency(trip.childPrice)}
+                </p>
+              )}
+              {trip.insuranceEnabled && (
+                <p className="mt-1 text-sm text-brand-muted">
+                  Seguro viagem opcional: {formatCurrency(trip.insurancePrice)}/pessoa
+                </p>
+              )}
               {promo && promo.isPercent && (
                 <p className="mt-2 text-sm font-semibold text-emerald-700">
                   {promo.promotion.discountValue}% de desconto nesta oferta
@@ -155,6 +170,15 @@ export default async function TripDetailPage({
           <Section title="Não incluso" body={trip.notIncluded} />
           <Section title="Regras" body={trip.rules} />
           <Section title="Cancelamento" body={trip.cancellationPolicy} />
+          {trip.transportPolicy && (
+            <Section title="Política de transporte" body={trip.transportPolicy} />
+          )}
+          <Link
+            href="/politicas"
+            className="surface-card inline-flex items-center justify-center gap-2 p-6 text-sm font-semibold text-brand-primary transition hover:bg-brand-tint"
+          >
+            Ver políticas e condições
+          </Link>
         </div>
 
         <div className="surface-card mt-10 p-6 md:p-8">

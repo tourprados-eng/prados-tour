@@ -8,6 +8,7 @@ const nav = [
   { href: "/excursoes", label: "Excursões" },
   { href: "/ofertas", label: "Ofertas" },
   { href: "/sobre", label: "Sobre" },
+  { href: "/politicas", label: "Políticas" },
   { href: "/contato", label: "Contato" },
   { href: "/login", label: "Área do cliente" },
 ];

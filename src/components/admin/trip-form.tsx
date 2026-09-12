@@ -58,6 +58,12 @@ export default function TripForm({
   const [featured, setFeatured] = useState(true);
   const [formUrl, setFormUrl] = useState(trip?.formUrl ?? "");
   const [formRequired, setFormRequired] = useState(trip?.formRequired ?? true);
+  const [childPricingEnabled, setChildPricingEnabled] = useState(
+    Boolean(trip?.childMaxAge && trip?.childMaxAge > 0 && trip?.childPrice != null),
+  );
+  const [insuranceEnabled, setInsuranceEnabled] = useState(
+    trip?.insuranceEnabled ?? false,
+  );
   const inputRef = useRef<HTMLInputElement>(null);
 
   const selectedCount = useMemo(
@@ -168,6 +174,12 @@ export default function TripForm({
 
     formData.set("featured", featured ? "true" : "false");
 
+    if (!childPricingEnabled) {
+      formData.set("childPrice", "");
+      formData.set("childMaxAge", "");
+    }
+    formData.set("insuranceEnabled", insuranceEnabled ? "true" : "false");
+
     /*
      * As imagens são enviadas para a API de upload antes de salvar a viagem.
      * A ordem dos itens define a ordem final (a primeira é a foto principal);
@@ -226,6 +238,15 @@ export default function TripForm({
       returnDate: returnDate || undefined,
       pricePerson: Number(formData.get("pricePerson")),
       priceCouple: Number(formData.get("priceCouple") || 0),
+      childPrice: Number(formData.get("childPrice") || 0) > 0
+        ? Number(formData.get("childPrice"))
+        : null,
+      childMaxAge: Number(formData.get("childMaxAge") || 0) > 0
+        ? Number(formData.get("childMaxAge"))
+        : null,
+      insuranceEnabled: insuranceEnabled,
+      insurancePrice: Number(formData.get("insurancePrice") || 20),
+      transportPolicy: String(formData.get("transportPolicy")),
       totalSeats: Number(formData.get("totalSeats")),
       description: String(formData.get("description")),
       itinerary: String(formData.get("itinerary")),
@@ -443,6 +464,94 @@ export default function TripForm({
                   placeholder="320,00"
                   className="h-12 w-full rounded-xl border border-[#ddd2d8] px-4 text-sm outline-none focus:border-[#ec3f88]"
                 />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-[#eee5e9] bg-[#fffafc] p-4">
+                  <input
+                    type="checkbox"
+                    checked={childPricingEnabled}
+                    onChange={(e) => setChildPricingEnabled(e.target.checked)}
+                    className="h-5 w-5 accent-[#ec3f88]"
+                  />
+                  <div>
+                    <p className="text-sm font-semibold text-[#302229]">
+                      Preço especial para crianças
+                    </p>
+                    <p className="mt-1 text-xs text-[#77666e]">
+                      Define um preço e uma idade-limite para crianças nesta viagem.
+                    </p>
+                  </div>
+                </label>
+
+                {childPricingEnabled && (
+                  <div className="mt-3 grid gap-4 md:grid-cols-2">
+                    <div>
+                      <label className="mb-2 block text-sm font-semibold text-[#302229]">
+                        Preço da criança (R$) *
+                      </label>
+                      <input
+                        name="childPrice"
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        required
+                        defaultValue={trip?.childPrice ?? ""}
+                        placeholder="120,00"
+                        className="h-12 w-full rounded-xl border border-[#ddd2d8] px-4 text-sm outline-none focus:border-[#ec3f88]"
+                      />
+                    </div>
+                    <div>
+                      <label className="mb-2 block text-sm font-semibold text-[#302229]">
+                        Idade máxima da criança (anos) *
+                      </label>
+                      <input
+                        name="childMaxAge"
+                        type="number"
+                        min="0"
+                        max="17"
+                        required
+                        defaultValue={trip?.childMaxAge ?? ""}
+                        placeholder="10"
+                        className="h-12 w-full rounded-xl border border-[#ddd2d8] px-4 text-sm outline-none focus:border-[#ec3f88]"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="flex cursor-pointer items-center gap-3 rounded-xl border border-[#eee5e9] bg-[#fffafc] p-4">
+                  <input
+                    type="checkbox"
+                    checked={insuranceEnabled}
+                    onChange={(e) => setInsuranceEnabled(e.target.checked)}
+                    className="h-5 w-5 accent-[#ec3f88]"
+                  />
+                  <div className="flex-1">
+                    <p className="text-sm font-semibold text-[#302229]">
+                      Seguro viagem opcional
+                    </p>
+                    <p className="mt-1 text-xs text-[#77666e]">
+                      O cliente poderá adicionar o seguro por passageiro no
+                      momento da reserva.
+                    </p>
+                  </div>
+                  <div className="w-[150px]">
+                    <label className="mb-1 block text-xs font-medium text-[#77666e]">
+                      Valor por pessoa (R$)
+                    </label>
+                    <input
+                      name="insurancePrice"
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      disabled={!insuranceEnabled}
+                      defaultValue={trip?.insurancePrice ?? 20}
+                      className="h-11 w-full rounded-xl border border-[#ddd2d8] bg-white px-3 text-sm font-semibold outline-none focus:border-[#ec3f88] disabled:cursor-not-allowed disabled:bg-[#f6f2f4] disabled:text-[#b3a4ac]"
+                    />
+                  </div>
+                </label>
               </div>
 
               <div>
@@ -769,6 +878,19 @@ export default function TripForm({
                   rows={4}
                   defaultValue={trip?.cancellationPolicy ?? ""}
                   placeholder="Política de cancelamento..."
+                  className="w-full rounded-2xl border border-[#ddd2d8] p-4 text-sm outline-none focus:border-[#ec3f88]"
+                />
+              </div>
+
+              <div className="md:col-span-2">
+                <label className="mb-2 block text-sm font-semibold">
+                  Política de transporte
+                </label>
+                <textarea
+                  name="transportPolicy"
+                  rows={4}
+                  defaultValue={trip?.transportPolicy ?? ""}
+                  placeholder="Regras de transporte, embarque, poltronas, crianças no ônibus..."
                   className="w-full rounded-2xl border border-[#ddd2d8] p-4 text-sm outline-none focus:border-[#ec3f88]"
                 />
               </div>
