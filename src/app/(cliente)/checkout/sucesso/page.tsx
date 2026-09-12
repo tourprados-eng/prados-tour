@@ -27,13 +27,33 @@ export default async function CheckoutSuccessPage({
   ) {
     notFound();
   }
-  const trip = store.trips.find((t) => t.id === booking.tripId)!;
-  const payment = store.payments.find((p) => p.bookingId === booking.id)!;
+  const trip = store.trips.find((t) => t.id === booking.tripId);
+  if (!trip) {
+    return (
+      <div className="mx-auto max-w-2xl px-4 py-12">
+        <div className="rounded-3xl bg-white/90 p-8 ring-1 ring-black/5">
+          <h1 className="font-[family-name:var(--font-display)] text-3xl font-bold">
+            Reserva indisponível
+          </h1>
+          <p className="mt-2 text-black/60">
+            Não foi possível encontrar os detalhes desta viagem. Tente novamente
+            em instantes ou consulte em Minhas viagens.
+          </p>
+          <p className="mt-6 text-center text-sm">
+            <Link href="/excursoes" className="text-[var(--brand-primary)]">
+              Continuar explorando
+            </Link>
+          </p>
+        </div>
+      </div>
+    );
+  }
+  const payment = store.payments.find((p) => p.bookingId === booking.id);
   const balance = store.installments.find(
     (i) => i.bookingId === booking.id && i.number === 2 && i.status === "PENDENTE",
   );
   const qr =
-    payment.pixCopyPaste && payment.status === "PENDENTE"
+    payment && payment.pixCopyPaste && payment.status === "PENDENTE"
       ? await QRCode.toDataURL(payment.pixCopyPaste, { margin: 1, width: 220 })
       : null;
 
@@ -51,9 +71,17 @@ export default async function CheckoutSuccessPage({
           <p>
             Status da reserva: <strong>{booking.status}</strong>
           </p>
-          <p>
-            Pagamento: <strong>{payment.status}</strong> · {formatCurrency(payment.amount)}
-          </p>
+          {payment ? (
+            <p>
+              Pagamento: <strong>{payment.status}</strong> ·{" "}
+              {formatCurrency(payment.amount)}
+            </p>
+          ) : (
+            <p className="rounded-2xl bg-orange-50 p-3 text-orange-900">
+              PIX ainda sendo gerado. Tente abrir a reserva novamente em
+              instantes ou veja em Minhas viagens.
+            </p>
+          )}
           {balance && (
             <p className="rounded-2xl bg-orange-50 p-3 text-orange-900">
               Saldo restante: {formatCurrency(balance.value)} · vencimento{" "}
@@ -62,7 +90,7 @@ export default async function CheckoutSuccessPage({
           )}
         </div>
 
-        {payment.method === "PIX" && payment.status === "PENDENTE" && (
+        {payment && payment.method === "PIX" && payment.status === "PENDENTE" && (
           <div className="mt-8 text-center">
             <p className="font-semibold">PIX — pague o valor abaixo</p>
             <p className="mt-1 text-2xl font-bold text-[var(--brand-primary)]">
@@ -85,7 +113,7 @@ export default async function CheckoutSuccessPage({
           </div>
         )}
 
-        {payment.method === "CARTAO" && payment.status === "PENDENTE" && (
+        {payment?.method === "CARTAO" && payment?.status === "PENDENTE" && (
           <div className="mt-8 rounded-2xl bg-pink-50 p-4 text-sm">
             Cartão: o atendimento de{" "}
             {store.brand.companyName || "Prado's Tour"} finalizará a cobrança
@@ -113,11 +141,11 @@ export default async function CheckoutSuccessPage({
           </Button>
         </div>
 
-        {session && ["SUPER_ADMIN", "ADMIN", "FINANCEIRO"].includes(session.role) && payment.status === "PENDENTE" && (
+        {session && ["SUPER_ADMIN", "ADMIN", "FINANCEIRO"].includes(session.role) && payment?.status === "PENDENTE" && (
           <form
             action={async () => {
               "use server";
-              await simulateGatewayConfirm(payment.id);
+              await simulateGatewayConfirm(payment!.id);
             }}
             className="mt-6"
           >
