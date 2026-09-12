@@ -1,0 +1,28 @@
+{
+  "previewPort": 3000,
+  "healthPath": "/",
+  "startCommand": "docker compose -f docker-compose.base44.yml up -d",
+  "secrets": [
+    {
+      "name": "AUTH_SECRET",
+      "description": "JWT signing secret for local session auth. Generated for development; replace with a strong value (openssl rand -base64 32) for production.",
+      "requiredAtBoot": true,
+      "generatedForDevelopment": true
+    },
+    {
+      "name": "ASAAS_API_KEY",
+      "description": "Asaas API key for PIX/card payment integration. Only needed when processing real payments; not required for local-mode boot.",
+      "requiredAtBoot": false
+    },
+    {
+      "name": "ASAAS_ENVIRONMENT",
+      "description": "Asaas environment: 'sandbox' or 'production'. Defaults to sandbox.",
+      "requiredAtBoot": false
+    },
+    {
+      "name": "ASAAS_WEBHOOK_TOKEN",
+      "description": "Token for verifying Asaas payment webhooks. Optional in development; required in production.",
+      "requiredAtBoot": false
+    }
+  ]
+}
