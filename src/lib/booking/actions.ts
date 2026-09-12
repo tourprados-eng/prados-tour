@@ -1025,14 +1025,25 @@ async function ensureAsaasPixPayment(
         dueDate: installment1?.dueDate ?? new Date().toISOString().slice(0, 10),
         description: `Reserva ${booking.reference} - ${trip.name}`.slice(0, 120),
         externalReference,
-      }).catch(async () => {
-        try {
-          return (await findAsaasPaymentByExternalReference(externalReference)) ?? null;
-        } catch {
-          return null;
-        }
-      });
+}).catch(async (error) => {
+  console.error(
+    "[ASAAS] Erro ao criar cobrança PIX:",
+    error instanceof Error ? error.message : error,
+  );
 
+  try {
+    return (await findAsaasPaymentByExternalReference(externalReference)) ?? null;
+  } catch (reconcileError) {
+    console.error(
+      "[ASAAS] Erro ao reconciliar cobrança PIX:",
+      reconcileError instanceof Error
+        ? reconcileError.message
+        : reconcileError,
+    );
+
+    return null;
+  }
+});
       if (created) {
         chargeId = created.id;
         await updatePixClaim(paymentId, { chargeId, bookingId }).catch(() => undefined);
@@ -1067,7 +1078,12 @@ async function ensureAsaasPixPayment(
       const qrCode = await getAsaasPixQrCode(chargeId);
       payload = qrCode.payload;
       expirationDate = qrCode.expirationDate;
-    } catch {
+    } catch (error) {
+      console.error(
+        "[ASAAS] Erro ao obter QR Code PIX:",
+        error instanceof Error ? error.message : error,
+      );
+
       payload = null;
     }
   }
