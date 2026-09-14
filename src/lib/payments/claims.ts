@@ -185,7 +185,8 @@ export async function acquirePixClaim(args: {
           updated_at: now,
         },
         { onConflict: "idempotency_key", ignoreDuplicates: true },
-      );
+      )
+      .select("*");
     if (error) throw error;
 
     const inserted = (data ?? []) as ClaimRow[];
