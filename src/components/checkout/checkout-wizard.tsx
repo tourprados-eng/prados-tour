@@ -102,8 +102,16 @@ export function CheckoutWizard({
   brandName: string;
 }) {
   const [step, setStep] = useState(0);
-  const [adultCount, setAdultCount] = useState(1);
-  const [childCount, setChildCount] = useState(0);
+  const [adultText, setAdultText] = useState("");
+  const [childText, setChildText] = useState("");
+  const adultCount = Math.min(
+    availableSeats,
+    Math.max(0, Number.parseInt(adultText, 10) || 0),
+  );
+  const childCount = Math.min(
+    Math.max(0, availableSeats - adultCount),
+    Math.max(0, Number.parseInt(childText, 10) || 0),
+  );
   const quantity = adultCount + childCount;
   const [boardingPointId, setBoardingPointId] = useState(boarding[0]?.point.id || "");
   const [method, setMethod] = useState<"PIX" | "CARTAO">("PIX");
@@ -150,6 +158,11 @@ export function CheckoutWizard({
 
   // Valores oficiais vindos do motor de preços no servidor.
   useEffect(() => {
+    if (quantity < 1) {
+      setPrice(null);
+      setPriceError(null);
+      return;
+    }
     let active = true;
     setPriceError(null);
     const timer = setTimeout(async () => {
@@ -184,21 +197,20 @@ export function CheckoutWizard({
       ? total
       : Math.round((total / 2) * 100) / 100;
 
-  function syncPassengerQuantity(nextAdults: number, nextChildren: number) {
-    const adults = Math.max(
-      1,
-      Math.min(availableSeats, Math.floor(nextAdults || 0)),
+  function commitQuantity() {
+    const adults = Math.min(
+      availableSeats,
+      Math.max(0, Number.parseInt(adultText, 10) || 0),
     );
-
-    const children = Math.max(
-      0,
-      Math.min(availableSeats - adults, Math.floor(nextChildren || 0)),
+    const children = Math.min(
+      Math.max(0, availableSeats - adults),
+      Math.max(0, Number.parseInt(childText, 10) || 0),
     );
 
     const total = adults + children;
 
-    setAdultCount(adults);
-    setChildCount(children);
+    setAdultText(adults === 0 ? "" : String(adults));
+    setChildText(children === 0 ? "" : String(children));
 
     setPassengers((prev) => {
       const copy = [...prev];
@@ -217,16 +229,14 @@ export function CheckoutWizard({
     });
   }
 
-  function updateAdultCount(value: number) {
-    syncPassengerQuantity(value, childCount);
-  }
-
-  function updateChildCount(value: number) {
-    syncPassengerQuantity(adultCount, value);
-  }
-
   function submit() {
     if (submitted.current) return;
+
+    if (quantity < 1) {
+      setError("Informe ao menos um passageiro.");
+      setStep(0);
+      return;
+    }
 
     const problems: string[] = [];
     passengers.forEach((p, idx) => {
@@ -368,11 +378,9 @@ export function CheckoutWizard({
                   type="number"
                   min={1}
                   max={availableSeats}
-                  value={adultCount}
-                  onChange={(e) => {
-                    if (e.target.value === "") return;
-                    updateAdultCount(Number(e.target.value));
-                  }}
+                  value={adultText}
+                  onChange={(e) => setAdultText(e.target.value)}
+                  onBlur={commitQuantity}
                 />
               </div>
 
@@ -382,11 +390,9 @@ export function CheckoutWizard({
                   type="number"
                   min={0}
                   max={Math.max(0, availableSeats - adultCount)}
-                  value={childCount}
-                  onChange={(e) => {
-                    if (e.target.value === "") return;
-                    updateChildCount(Number(e.target.value));
-                  }}
+                  value={childText}
+                  onChange={(e) => setChildText(e.target.value)}
+                  onBlur={commitQuantity}
                 />
               </div>
             </div>
@@ -808,7 +814,18 @@ export function CheckoutWizard({
             Voltar
           </Button>
           {step < steps.length - 1 ? (
-            <Button type="button" onClick={() => setStep((s) => s + 1)}>
+            <Button
+              type="button"
+              onClick={() => {
+                commitQuantity();
+                if (step === 0 && quantity < 1) {
+                  setError("Informe ao menos um passageiro.");
+                  return;
+                }
+                setError(null);
+                setStep((s) => s + 1);
+              }}
+            >
               Continuar
             </Button>
           ) : (
