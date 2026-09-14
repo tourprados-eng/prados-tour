@@ -145,7 +145,8 @@ export async function claimAsaasWebhookEvent(args: {
           created_at: now,
         },
         { onConflict: "event_id", ignoreDuplicates: true },
-      );
+      )
+      .select("*");
     if (error) throw error;
 
     const inserted = (data ?? []) as WebhookEventRow[];
