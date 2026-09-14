@@ -369,7 +369,10 @@ export function CheckoutWizard({
                   min={1}
                   max={availableSeats}
                   value={adultCount}
-                  onChange={(e) => updateAdultCount(Number(e.target.value))}
+                  onChange={(e) => {
+                    if (e.target.value === "") return;
+                    updateAdultCount(Number(e.target.value));
+                  }}
                 />
               </div>
 
@@ -380,7 +383,10 @@ export function CheckoutWizard({
                   min={0}
                   max={Math.max(0, availableSeats - adultCount)}
                   value={childCount}
-                  onChange={(e) => updateChildCount(Number(e.target.value))}
+                  onChange={(e) => {
+                    if (e.target.value === "") return;
+                    updateChildCount(Number(e.target.value));
+                  }}
                 />
               </div>
             </div>
