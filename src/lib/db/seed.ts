@@ -417,6 +417,7 @@ export async function createSeedStore(): Promise<DataStore> {
       },
     ],
     reviews: [],
+    galleryPhotos: [],
     loyaltyPoints: [
       {
         id: uuid(),

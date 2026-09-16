@@ -31,6 +31,13 @@ export const NAV_ITEMS: NavItem[] = [
     superOnly: true,
   },
   {
+    href: "/admin/galeria",
+    label: "Galeria",
+    icon: "▣",
+    area: "admin",
+    superOnly: true,
+  },
+  {
     href: "/admin/auditoria",
     label: "Auditoria",
     icon: "✎",

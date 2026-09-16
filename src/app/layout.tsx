@@ -48,9 +48,13 @@ export default function RootLayout({
           {`
             window.OneSignalDeferred = window.OneSignalDeferred || [];
             OneSignalDeferred.push(async function(OneSignal) {
-              await OneSignal.init({
-                appId: "03bda2ea-ad11-4b11-884d-2cf4ddc9bcb7",
-              });
+              try {
+                await OneSignal.init({
+                  appId: "03bda2ea-ad11-4b11-884d-2cf4ddc9bcb7",
+                });
+              } catch (error) {
+                console.warn("[OneSignal] init falhou (não-fatal):", error);
+              }
             });
           `}
         </Script>

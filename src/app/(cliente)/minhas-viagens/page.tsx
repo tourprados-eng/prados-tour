@@ -2,17 +2,37 @@ import Link from "next/link";
 import { requireUser } from "@/lib/auth/actions";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { GalleryPhotoForm } from "@/components/gallery/gallery-photo-form";
 
 export default async function MyTripsPage() {
   const session = await requireUser();
   const store = await getRepositoryRuntime().read();
   const bookings = store.bookings.filter((b) => b.customerId === session.id);
 
+  const eligibleTrips = store.trips
+    .filter(
+      (trip) =>
+        trip.status === "PUBLICADA" ||
+        trip.status === "ESGOTADA" ||
+        trip.status === "FINALIZADA",
+    )
+    .map((trip) => ({
+      id: trip.id,
+      name: trip.name,
+      date: formatDate(trip.date),
+    }));
+
   return (
     <div className="mx-auto max-w-4xl px-4 py-12">
       <h1 className="font-[family-name:var(--font-display)] text-3xl font-bold">
         Minhas viagens
       </h1>
+      {eligibleTrips.length > 0 && (
+        <div className="mt-8">
+          <GalleryPhotoForm trips={eligibleTrips} />
+        </div>
+      )}
+
       <div className="mt-8 space-y-4">
         {bookings.length === 0 && (
           <p className="text-black/60">

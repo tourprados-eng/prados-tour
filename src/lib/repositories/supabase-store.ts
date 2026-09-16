@@ -114,6 +114,7 @@ const COLLECTION_TABLE: Record<string, { table: string; conflictKey: string; del
   checkins: { table: "checkins", conflictKey: "id", deleteColumn: "id" },
   notifications: { table: "notifications", conflictKey: "id", deleteColumn: "id" },
   reviews: { table: "reviews", conflictKey: "id", deleteColumn: "id" },
+  galleryPhotos: { table: "gallery_photos", conflictKey: "id", deleteColumn: "id" },
   loyaltyPoints: { table: "loyalty_points", conflictKey: "id", deleteColumn: "id" },
   referrals: { table: "referrals", conflictKey: "id", deleteColumn: "id" },
   auditLogs: { table: "audit_logs", conflictKey: "id", deleteColumn: "id" },
@@ -127,7 +128,7 @@ const COLLECTION_KEYS = Object.keys(COLLECTION_TABLE);
  * UPSERT: pais antes dos filhos (evita violação de FK ao inserir).
  */
 const DELETE_ORDER = [
-  "auditLogs", "notifications", "referrals", "loyaltyPoints", "reviews",
+  "auditLogs", "notifications", "referrals", "loyaltyPoints", "reviews", "galleryPhotos",
   "expenses", "checkins", "couponUsages", "promotionUsages", "installments", "payments",
   "passengers", "seats", "commissions", "bookings", "sellers",
   "tripBoardingPoints", "boardingPoints", "trips", "promotions", "profiles",

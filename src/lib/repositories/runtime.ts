@@ -38,6 +38,7 @@ export type RepositoryRuntime = {
   getCheckins(): Promise<DataStore["checkins"]>;
   getNotifications(): Promise<DataStore["notifications"]>;
   getReviews(): Promise<DataStore["reviews"]>;
+  getGalleryPhotos(): Promise<DataStore["galleryPhotos"]>;
   getLoyaltyPoints(): Promise<DataStore["loyaltyPoints"]>;
   getReferrals(): Promise<DataStore["referrals"]>;
   getAuditLogs(): Promise<DataStore["auditLogs"]>;
@@ -89,6 +90,7 @@ export function getRepositoryRuntime(): RepositoryRuntime {
     getCheckins: () => repository.read().then((s) => s.checkins),
     getNotifications: () => repository.read().then((s) => s.notifications),
     getReviews: () => repository.read().then((s) => s.reviews),
+    getGalleryPhotos: () => repository.read().then((s) => s.galleryPhotos),
     getLoyaltyPoints: () => repository.read().then((s) => s.loyaltyPoints),
     getReferrals: () => repository.read().then((s) => s.referrals),
     getAuditLogs: () => repository.read().then((s) => s.auditLogs),

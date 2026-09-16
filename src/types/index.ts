@@ -25,6 +25,7 @@ export type CouponType = "PERCENTUAL" | "FIXO";
 export type PromotionDiscountType = "PERCENTUAL" | "FIXO" | "PRECO";
 export type SeatState = "DISPONIVEL" | "SELECIONADO" | "OCUPADO" | "BLOQUEADO";
 export type ReviewStatus = "PENDENTE" | "APROVADO" | "REJEITADO";
+export type GalleryPhotoStatus = "PENDENTE" | "APROVADO" | "REJEITADO";
 
 export interface Profile {
   id: string;
@@ -291,6 +292,21 @@ export interface Review {
   createdAt: string;
 }
 
+export interface GalleryPhoto {
+  id: string;
+  customerId: string | null;
+  tripId: string | null;
+  url: string;
+  caption: string | null;
+  status: GalleryPhotoStatus;
+  showOnHome: boolean;
+  sortOrder: number;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface LoyaltyPoint {
   id: string;
   customerId: string;
@@ -389,6 +405,7 @@ export interface DataStore {
   checkins: Checkin[];
   notifications: Notification[];
   reviews: Review[];
+  galleryPhotos: GalleryPhoto[];
   loyaltyPoints: LoyaltyPoint[];
   referrals: Referral[];
   auditLogs: AuditLog[];
