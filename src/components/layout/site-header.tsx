@@ -24,13 +24,13 @@ export async function SiteHeader() {
       <div className="border-b border-brand-line/80 bg-white/85 backdrop-blur-xl">
         <div className="container-page flex h-[4.25rem] items-center justify-between gap-3 md:h-[4.75rem]">
           <Link href="/" className="group flex min-w-0 items-center gap-3">
-            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-2xl bg-white ring-1 ring-brand-line shadow-sm transition group-hover:ring-brand-primary/50 group-hover:shadow-glow">
+            <span className="grid h-11 w-11 shrink-0 place-items-center rounded-xl transition group-hover:opacity-90">
               <Image
                 src={brand.logoUrl}
                 alt={brand.companyName}
                 width={44}
                 height={44}
-                className="h-8 w-8 object-contain"
+                className="h-10 w-10 object-contain drop-shadow-sm"
                 priority
               />
             </span>
@@ -70,7 +70,11 @@ export async function SiteHeader() {
                 <Button href="/login" variant="ghost" size="sm">
                   Entrar
                 </Button>
-                <Button href="/criar-conta" size="sm">
+                <Button
+                  href="/criar-conta"
+                  size="sm"
+                  className="bg-brand-primary text-white shadow-[0_4px_12px_rgba(232,76,145,0.28)] transition duration-300 hover:-translate-y-0.5 hover:bg-brand-deep hover:shadow-[0_6px_16px_rgba(232,76,145,0.36)]"
+                >
                   Criar conta
                 </Button>
               </>

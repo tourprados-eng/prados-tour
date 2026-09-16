@@ -11,6 +11,7 @@ const BACKUP_DIR = process.env.LOCAL_STORE_BACKUP_DIR?.trim();
 function normalizeStore(store: DataStore): DataStore {
   store.promotions ??= [];
   store.promotionUsages ??= [];
+  store.galleryPhotos ??= [];
 
   // Normaliza viagens com campos novos (compatibilidade com store.json antigo).
   for (const trip of store.trips ?? []) {
@@ -71,6 +72,7 @@ function normalizeStore(store: DataStore): DataStore {
 }
 
 let memoryStore: DataStore | null = null;
+let memoryStoreMtime = 0;
 let writeQueue: Promise<void> = Promise.resolve();
 
 async function persistStore(store: DataStore) {
@@ -90,15 +92,32 @@ async function persistStore(store: DataStore) {
 }
 
 async function ensureStore(): Promise<DataStore> {
-  if (memoryStore) return memoryStore;
   await fs.mkdir(DATA_DIR, { recursive: true });
+
   try {
+    const stat = await fs.stat(STORE_PATH);
+    const mtime = stat.mtimeMs;
+
+    if (memoryStore && memoryStoreMtime === mtime) {
+      return memoryStore;
+    }
+
     const raw = await fs.readFile(STORE_PATH, "utf8");
     memoryStore = normalizeStore(JSON.parse(raw) as DataStore);
+    memoryStoreMtime = mtime;
+
     return memoryStore;
   } catch {
     memoryStore = await createSeedStore();
     await persistStore(memoryStore);
+
+    try {
+      const stat = await fs.stat(STORE_PATH);
+      memoryStoreMtime = stat.mtimeMs;
+    } catch {
+      memoryStoreMtime = 0;
+    }
+
     return memoryStore;
   }
 }
@@ -115,6 +134,14 @@ export async function updateStore<T>(
     const result = await mutator(store);
     memoryStore = store;
     await persistStore(store);
+
+    try {
+      const stat = await fs.stat(STORE_PATH);
+      memoryStoreMtime = stat.mtimeMs;
+    } catch {
+      memoryStoreMtime = 0;
+    }
+
     return result;
   };
   const next = writeQueue.then(run, run);

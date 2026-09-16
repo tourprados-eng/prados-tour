@@ -1,0 +1,100 @@
+import { NextResponse } from "next/server";
+import { readFile } from "fs/promises";
+import path from "path";
+import { getSession } from "@/lib/auth/session";
+import { getRepositoryRuntime } from "@/lib/repositories/runtime";
+import { getDataBackend } from "@/lib/supabase/config";
+import { createSupabaseAdminClient } from "@/lib/supabase/server";
+
+export async function GET(request: Request) {
+  const session = await getSession();
+
+  if (!session || session.role !== "SUPER_ADMIN") {
+    return new NextResponse("Sem permissão.", { status: 403 });
+  }
+
+  const url = new URL(request.url);
+  const photoId = url.searchParams.get("id");
+
+  if (!photoId) {
+    return new NextResponse("Foto não informada.", { status: 400 });
+  }
+
+  const store = await getRepositoryRuntime().read();
+  const photo = store.galleryPhotos.find((item) => item.id === photoId);
+
+  if (!photo) {
+    return new NextResponse("Foto não encontrada.", { status: 404 });
+  }
+
+  const filename = path.basename(photo.url);
+
+  if (filename !== photo.url) {
+    return new NextResponse("Arquivo inválido.", { status: 400 });
+  }
+
+  if (getDataBackend() === "supabase") {
+    try {
+      const supabase = createSupabaseAdminClient();
+
+      const { data, error } = await supabase.storage
+        .from("gallery-photos")
+        .download(filename);
+
+      if (error || !data) {
+        return new NextResponse(
+          "Arquivo da foto não encontrado.",
+          { status: 404 },
+        );
+      }
+
+      return new NextResponse(data, {
+        status: 200,
+        headers: {
+          "Content-Type": "image/jpeg",
+          "Cache-Control": "private, no-store",
+        },
+      });
+    } catch {
+      return new NextResponse(
+        "Arquivo da foto não encontrado.",
+        { status: 404 },
+      );
+    }
+  }
+
+  // Fallback local.
+  const folders =
+    photo.status === "APROVADO"
+      ? ["approved", "pending"]
+      : ["pending"];
+
+  for (const folder of folders) {
+    const filepath = path.join(
+      process.cwd(),
+      ".data",
+      "gallery",
+      folder,
+      filename,
+    );
+
+    try {
+      const buffer = await readFile(filepath);
+
+      return new NextResponse(buffer, {
+        status: 200,
+        headers: {
+          "Content-Type": "image/jpeg",
+          "Cache-Control": "private, no-store",
+        },
+      });
+    } catch {
+      // tenta a próxima localização
+    }
+  }
+
+  return new NextResponse(
+    "Arquivo da foto não encontrado.",
+    { status: 404 },
+  );
+}

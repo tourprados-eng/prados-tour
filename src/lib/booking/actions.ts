@@ -143,9 +143,6 @@ export async function createBookingAction(input: CheckoutInput) {
         if (adopted.ok) {
           redirect(`/checkout/sucesso?booking=${completedId}`);
         }
-        if (claimWon === false) {
-          await releasePixClaim(paymentId).catch(() => undefined);
-        }
         return {
           error:
             adopted.message ??
@@ -538,12 +535,9 @@ export async function createBookingAction(input: CheckoutInput) {
     redirect(`/checkout/sucesso?booking=${bookingId}`);
   }
 
-  // A reserva EXISTE, mas o PIX não pôde ser gerado agora. Libera a claim para
-  // que o retry (que retoma a mesma reserva pela regra de idempotência) possa
-  // reprocessar imediatamente, sem esperar o lease expirar.
-  if (claimWon) {
-    await releasePixClaim(paymentId).catch(() => undefined);
-  }
+  // A reserva EXISTE, mas o PIX não pôde ser gerado agora. A liberação da
+  // claim já foi garantida dentro de ensureAsaasPixPayment (finally) em
+  // qualquer caminho de falha, para que o retry reprocesse sem esperar lease.
 
   return {
     error:
@@ -986,134 +980,172 @@ async function ensureAsaasPixPayment(
   bookingId: string,
   paymentId: string,
   opts: { responsibleEmail?: string },
-): Promise<{ ok: boolean; message?: string }> {
-  const store = await getRepositoryRuntime().read();
-  const payment = store.payments.find((p) => p.bookingId === bookingId);
-  if (payment?.status === "PAGO") {
-    return { ok: true };
-  }
-
-  const booking = store.bookings.find((b) => b.id === bookingId);
-  const trip = store.trips.find((t) => t.id === booking?.tripId);
-  const profile = store.profiles.find((p) => p.id === booking?.customerId);
-  const installment1 = store.installments.find(
-    (i) => i.bookingId === bookingId && i.number === 1,
-  );
-  if (!booking || !trip || !profile) {
-    return { ok: false, message: "Dados da reserva incompletos para gerar o PIX." };
-  }
-
-  const externalReference = `PRADOS-TOUR:${paymentId}`;
-  const amount = payment?.amount ?? installment1?.value ?? booking.totalAmount;
-
-  let chargeId: string | null = payment?.gatewayPaymentId ?? null;
-
-  if (!chargeId) {
-    try {
-      chargeId = (await findAsaasPaymentByExternalReference(externalReference))?.id ?? null;
-    } catch {
-      chargeId = null;
-    }
-  }
-
-  if (!chargeId) {
-    try {
-      const asaasCustomer = await getOrCreateAsaasCustomer({
-        name: profile.fullName,
-        cpfCnpj: profile.cpf,
-        email: opts.responsibleEmail?.trim() || profile.email,
-        mobilePhone: onlyDigits(profile.phone ?? profile.whatsapp ?? ""),
-        externalReference: `pt-customer-${booking.customerId}`,
-      });
-
-      const created = await createAsaasPixPayment({
-        customer: asaasCustomer.id,
-        billingType: "PIX",
-        value: amount,
-        dueDate: installment1?.dueDate ?? new Date().toISOString().slice(0, 10),
-        description: `Reserva ${booking.reference} - ${trip.name}`.slice(0, 120),
-        externalReference,
-}).catch(async (error) => {
-  console.error(
-    "[ASAAS] Erro ao criar cobrança PIX:",
-    error instanceof Error ? error.message : error,
-  );
-
+): Promise<{ ok: boolean; message?: string; error?: string }> {
+  let completed = false;
   try {
-    return (await findAsaasPaymentByExternalReference(externalReference)) ?? null;
-  } catch (reconcileError) {
-    console.error(
-      "[ASAAS] Erro ao reconciliar cobrança PIX:",
-      reconcileError instanceof Error
-        ? reconcileError.message
-        : reconcileError,
-    );
+    let store;
+    try {
+      store = await getRepositoryRuntime().read();
+    } catch (error) {
+      console.error("[ASAAS] read() falhou em ensureAsaasPixPayment:", error);
+      return { ok: false, error: "read_failed" };
+    }
+    const payment = store.payments.find((p) => p.bookingId === bookingId);
+    if (payment?.status === "PAGO") {
+      completed = true;
+      return { ok: true };
+    }
 
-    return null;
-  }
-});
-      if (created) {
-        chargeId = created.id;
-        await updatePixClaim(paymentId, { chargeId, bookingId }).catch(() => undefined);
+    const booking = store.bookings.find((b) => b.id === bookingId);
+    const trip = store.trips.find((t) => t.id === booking?.tripId);
+    const profile = store.profiles.find((p) => p.id === booking?.customerId);
+    const installment1 = store.installments.find(
+      (i) => i.bookingId === bookingId && i.number === 1,
+    );
+    if (!booking || !trip || !profile) {
+      return {
+        ok: false,
+        message: "Dados da reserva incompletos para gerar o PIX.",
+      };
+    }
+
+    const externalReference = `PRADOS-TOUR:${paymentId}`;
+    const amount = payment?.amount ?? installment1?.value ?? booking.totalAmount;
+
+    let chargeId: string | null = payment?.gatewayPaymentId ?? null;
+
+    if (!chargeId) {
+      try {
+        chargeId =
+          (await findAsaasPaymentByExternalReference(externalReference))?.id ?? null;
+      } catch {
+        chargeId = null;
       }
-    } catch {
-      // Falha de conexão/criação no Asaas: a reserva e a claim são preservadas
-      // para retry seguro (clientRequestId/claim). Não estoura para a action.
+    }
+
+    if (!chargeId) {
+      try {
+        const asaasCustomer = await getOrCreateAsaasCustomer({
+          name: profile.fullName,
+          cpfCnpj: profile.cpf,
+          email: opts.responsibleEmail?.trim() || profile.email,
+          mobilePhone: onlyDigits(profile.phone ?? profile.whatsapp ?? ""),
+          externalReference: `pt-customer-${booking.customerId}`,
+        });
+
+        const created = await createAsaasPixPayment({
+          customer: asaasCustomer.id,
+          billingType: "PIX",
+          value: amount,
+          dueDate: installment1?.dueDate ?? new Date().toISOString().slice(0, 10),
+          description: `Reserva ${booking.reference} - ${trip.name}`.slice(0, 120),
+          externalReference,
+        }).catch(async (error) => {
+          console.error(
+            "[ASAAS] Erro ao criar cobrança PIX:",
+            error instanceof Error ? error.message : error,
+          );
+
+          try {
+            return (
+              (await findAsaasPaymentByExternalReference(externalReference)) ?? null
+            );
+          } catch (reconcileError) {
+            console.error(
+              "[ASAAS] Erro ao reconciliar cobrança PIX:",
+              reconcileError instanceof Error
+                ? reconcileError.message
+                : reconcileError,
+            );
+
+            return null;
+          }
+        });
+        if (created) {
+          chargeId = created.id;
+          await updatePixClaim(paymentId, { chargeId, bookingId }).catch(
+            () => undefined,
+          );
+        }
+      } catch (error) {
+        // Falha de conexão/criação no Asaas: a reserva e a claim são preservadas
+        // para retry seguro (clientRequestId/claim). Não estoura para a action.
+        console.error("[ASAAS] Falha ao criar/reconciliar cobrança PIX:", {
+          bookingId,
+          paymentId,
+          externalReference,
+          error: error instanceof Error ? error.message : error,
+        });
+        return {
+          ok: false,
+          message:
+            "Não foi possível gerar o PIX neste momento. Sua reserva foi criada e você poderá tentar novamente em instantes.",
+        };
+      }
+    }
+
+    if (!chargeId) {
       return {
         ok: false,
         message:
           "Não foi possível gerar o PIX neste momento. Sua reserva foi criada e você poderá tentar novamente em instantes.",
       };
     }
-  }
 
-  if (!chargeId) {
-    return {
-      ok: false,
-      message:
-        "Não foi possível gerar o PIX neste momento. Sua reserva foi criada e você poderá tentar novamente em instantes.",
-    };
-  }
+    let payload = payment?.pixCopyPaste ?? null;
+    let expirationDate: string | null =
+      typeof payment?.metadata?.pixExpirationDate === "string"
+        ? payment.metadata.pixExpirationDate
+        : null;
 
-  let payload = payment?.pixCopyPaste ?? null;
-  let expirationDate: string | null =
-    typeof payment?.metadata?.pixExpirationDate === "string"
-      ? payment.metadata.pixExpirationDate
-      : null;
+    if (!payload && chargeId) {
+      try {
+        const qrCode = await getAsaasPixQrCode(chargeId);
+        payload = qrCode.payload;
+        expirationDate = qrCode.expirationDate;
+      } catch (error) {
+        console.error(
+          "[ASAAS] Erro ao obter QR Code PIX:",
+          error instanceof Error ? error.message : error,
+        );
 
-  if (!payload && chargeId) {
+        payload = null;
+      }
+    }
+
     try {
-      const qrCode = await getAsaasPixQrCode(chargeId);
-      payload = qrCode.payload;
-      expirationDate = qrCode.expirationDate;
+      await persistPixPayment(bookingId, paymentId, {
+        chargeId,
+        payload,
+        expirationDate,
+        responsibleEmail: opts.responsibleEmail,
+      });
     } catch (error) {
-      console.error(
-        "[ASAAS] Erro ao obter QR Code PIX:",
-        error instanceof Error ? error.message : error,
-      );
+      console.error("[ASAAS] persistPixPayment() falhou em ensureAsaasPixPayment:", {
+        bookingId,
+        paymentId,
+        error: error instanceof Error ? error.message : error,
+      });
+      return { ok: false, error: "persist_failed" };
+    }
 
-      payload = null;
+    await completePixClaim(paymentId, { bookingId, paymentId, chargeId }).catch(
+      () => undefined,
+    );
+
+    if (!payload) {
+      return {
+        ok: false,
+        message:
+          "O PIX foi gerado, mas o QR Code ainda está pendente. Tente abrir a reserva novamente em instantes.",
+      };
+    }
+
+    completed = true;
+    return { ok: true };
+  } finally {
+    if (!completed) {
+      await releasePixClaim(paymentId).catch(() => undefined);
     }
   }
-
-  await persistPixPayment(bookingId, paymentId, {
-    chargeId,
-    payload,
-    expirationDate,
-    responsibleEmail: opts.responsibleEmail,
-  });
-
-  await completePixClaim(paymentId, { bookingId, paymentId, chargeId }).catch(
-    () => undefined,
-  );
-
-  if (!payload) {
-    return {
-      ok: false,
-      message:
-        "O PIX foi gerado, mas o QR Code ainda está pendente. Tente abrir a reserva novamente em instantes.",
-    };
-  }
-
-  return { ok: true };
 }

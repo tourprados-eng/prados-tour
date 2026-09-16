@@ -3,6 +3,7 @@ import { ShieldCheck, Bus, Ticket, HeartHandshake, Star, Check } from "lucide-re
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import { buildWhatsAppUrl } from "@/lib/contact";
 import { Button } from "@/components/ui/button";
+import { ClientGalleryCarousel } from "@/components/gallery/client-gallery-carousel";
 import { TripCard } from "@/components/trips/trip-card";
 import { OffersGrid } from "@/components/promotions/offers-grid";
 import { DEMO_PASSWORD_HINT } from "@/lib/constants";
@@ -10,23 +11,35 @@ import { DEMO_PASSWORD_HINT } from "@/lib/constants";
 const benefits = [
   {
     icon: Bus,
+    number: "01",
     title: "Embarque organizado",
     text: "Pontos e horários claros, com monitor acompanhando cada saída.",
+    highlight: "Mais tranquilidade para sua viagem",
+    image: "/images/beneficio-embarque.jpg",
   },
   {
     icon: Ticket,
+    number: "02",
     title: "Reserva e voucher digital",
     text: "Reserve online, pague no PIX ou parcelado e leve o QR Code no celular.",
+    highlight: "Praticidade do início ao embarque",
+    image: "/images/beneficio-voucher.png",
   },
   {
     icon: ShieldCheck,
+    number: "03",
     title: "Segurança em cada etapa",
     text: "Confirmação real de pagamento, vagas controladas e check-in na viagem.",
+    highlight: "Viagem segura e sem preocupações",
+    image: "/images/beneficio-seguranca.jpg",
   },
   {
     icon: HeartHandshake,
+    number: "04",
     title: "Atendimento próximo",
     text: "Equipe pronta para orientar antes, durante e depois da excursão.",
+    highlight: "Sempre com você em cada destino",
+    image: "/images/beneficio-atendimento.jpg",
   },
 ];
 
@@ -53,14 +66,32 @@ const trustItems = ["Pagamento seguro", "Voucher digital", "Vagas limitadas", "C
 export default async function HomePage() {
   const store = await getRepositoryRuntime().read();
   const trips = store.trips.filter((t) => t.status === "PUBLICADA" && !t.deletedAt);
-  const featured = trips.slice(0, 3);
+  const featured = [...trips]
+    .filter((trip) => new Date(trip.date).getTime() >= Date.now())
+    .sort(
+      (a, b) =>
+        new Date(a.date).getTime() - new Date(b.date).getTime(),
+    )
+    .slice(0, 3);
   const brand = store.brand;
   const banner = store.promoBanner;
-  const gallery = [
-    { src: "/images/guaruja.png", label: "Praias" },
-    { src: "/images/paraty.png", label: "Cultura" },
-    { src: brand.bannerUrl || "/images/guaruja.png", label: "Experiências" },
-  ];
+  const clientGallery = store.galleryPhotos
+    .filter((photo) => photo.status === "APROVADO" && photo.showOnHome)
+    .sort((a, b) => a.sortOrder - b.sortOrder)
+    .map((photo) => {
+      const trip = photo.tripId
+        ? store.trips.find((item) => item.id === photo.tripId)
+        : null;
+
+      return {
+        id: photo.id,
+        src: photo.url.startsWith("/")
+          ? photo.url
+          : `/api/gallery/public?id=${encodeURIComponent(photo.id)}`,
+        label: trip?.name || "Experiência",
+        caption: photo.caption,
+      };
+    });
 
   return (
     <div>
@@ -80,22 +111,35 @@ export default async function HomePage() {
         <div className="container-page relative flex min-h-[min(92vh,880px)] flex-col justify-center py-16 md:py-20">
           <div className="max-w-2xl text-white">
             <div className="hero-enter flex items-center gap-3">
-              <span className="grid h-16 w-16 shrink-0 place-items-center rounded-2xl bg-white/15 ring-1 ring-white/40 backdrop-blur-sm">
+              <span className="shrink-0">
                 <Image
                   src={brand.logoUrl}
                   alt={brand.companyName}
                   width={72}
                   height={72}
-                  className="h-12 w-12 object-contain drop-shadow"
+                  className="h-16 w-16 object-contain drop-shadow-[0_6px_14px_rgba(0,0,0,0.28)] transition duration-300 hover:scale-105"
                   priority
                 />
               </span>
-              <p className="font-display text-2xl font-bold tracking-tight sm:text-3xl">
+              <p className="font-display text-2xl font-bold tracking-tight text-white drop-shadow-[0_3px_8px_rgba(70,10,45,0.45)] sm:text-3xl">
                 {brand.companyName}
               </p>
             </div>
 
-            <h1 className="hero-enter-delay mt-7 font-display text-[2.35rem] font-bold leading-[1.08] tracking-tight sm:text-5xl md:text-[3.4rem]">
+
+
+            <div className="hero-enter-late mt-7 flex flex-wrap gap-2">
+              {["Bate-voltas", "Praias", "Parques", "Viagens em grupo"].map((item) => (
+                <span
+                  key={item}
+                  className="rounded-full bg-gradient-to-r from-brand-primary to-brand-secondary px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition duration-300 hover:-translate-y-0.5 hover:shadow-md"
+                >
+                  {item}
+                </span>
+              ))}
+            </div>
+
+            <h1 className="hero-enter-delay mt-5 font-display text-[2.35rem] font-bold leading-[1.08] tracking-tight sm:text-5xl md:text-[3.4rem]">
               Excursões com alegria, cuidado e segurança
             </h1>
 
@@ -119,7 +163,7 @@ export default async function HomePage() {
               <Button
                 href="/criar-conta"
                 size="lg"
-                className="border border-white/50 bg-white/10 text-white backdrop-blur-sm hover:bg-white/20 focus-visible:ring-white"
+                className="bg-brand-deep text-white shadow-[0_5px_18px_rgba(0,0,0,0.28)] transition duration-300 hover:-translate-y-0.5 hover:bg-[#a91f5c] hover:shadow-[0_7px_22px_rgba(0,0,0,0.32)] focus-visible:ring-white"
               >
                 Criar conta
               </Button>
@@ -129,9 +173,9 @@ export default async function HomePage() {
               {trustItems.map((item) => (
                 <li
                   key={item}
-                  className="flex items-center gap-1.5 rounded-full bg-white/15 px-3 py-1.5 text-xs font-semibold text-white/95 ring-1 ring-white/25 backdrop-blur-sm"
+                  className="flex items-center gap-2 rounded-full border border-white/25 bg-brand-deep/35 px-4 py-2 text-xs font-bold text-white shadow-[0_4px_14px_rgba(0,0,0,0.14)] backdrop-blur-md transition duration-300 hover:-translate-y-0.5 hover:bg-brand-deep/45"
                 >
-                  <Check className="h-3.5 w-3.5 text-white" strokeWidth={3} aria-hidden />
+                  <Check className="h-4 w-4 shrink-0 rounded-full bg-gradient-to-br from-brand-primary to-brand-secondary p-0.5 text-white shadow-sm" strokeWidth={3} aria-hidden />
                   {item}
                 </li>
               ))}
@@ -225,29 +269,132 @@ export default async function HomePage() {
       </section>
 
       {/* Benefícios */}
-      <section className="section-pad">
-        <div className="container-page">
-          <div className="mx-auto max-w-2xl text-center">
+      <section
+        className="relative overflow-hidden bg-[#f8dce8] bg-cover bg-center bg-no-repeat section-pad"
+        style={{ backgroundImage: 'url("/images/fundo-beneficios.png")' }}
+      >
+        <div className="container-page relative">
+          <div className="mx-auto max-w-3xl text-center">
             <p className="eyebrow justify-center">Por que escolher</p>
-            <h2 className="section-title mt-2">Benefícios de viajar com a {brand.companyName}</h2>
-            <p className="section-lead mx-auto">
+            <h2 className="mt-2 font-display text-3xl font-bold leading-tight tracking-tight text-brand-ink sm:text-4xl md:text-5xl">
+              Benefícios de viajar com a{" "}
+              <span className="text-brand-primary">{brand.companyName}</span>
+            </h2>
+            <p className="mx-auto mt-4 max-w-2xl text-base leading-relaxed text-brand-muted md:text-lg">
               Do primeiro clique ao check-in, tudo pensado para uma experiência tranquila.
             </p>
           </div>
 
-          <div className="mt-12 grid gap-5 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="mt-12 grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
             {benefits.map((item) => (
-              <div
+              <article
                 key={item.title}
-                className="surface-card p-6 transition duration-300 hover:-translate-y-1 hover:shadow-lift"
+                className="group relative flex min-h-[545px] flex-col overflow-hidden rounded-[2rem] border border-white/80 bg-white shadow-[0_12px_35px_rgba(93,29,57,0.10)] transition duration-500 hover:-translate-y-2 hover:shadow-[0_20px_45px_rgba(93,29,57,0.16)]"
               >
-                <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-brand-tint text-brand-primary shadow-sm">
-                  <item.icon className="h-5 w-5" aria-hidden />
+                <div className="relative z-10 p-6 pb-5">
+                  <span className="inline-flex h-10 min-w-10 items-center justify-center rounded-xl bg-[#fde2ed] px-3 text-sm font-extrabold text-brand-primary shadow-sm">
+                    {item.number}
+                  </span>
+
+                  <div className="mt-5 flex h-16 w-16 items-center justify-center rounded-full bg-[#fde7ef] text-brand-primary shadow-[0_6px_18px_rgba(232,76,145,0.12)] transition duration-500 group-hover:scale-105 group-hover:bg-brand-primary group-hover:text-white">
+                    <item.icon className="h-7 w-7" strokeWidth={1.8} aria-hidden />
+                  </div>
+
+                  <h3 className="mt-5 min-h-[3.5rem] font-display text-xl font-bold leading-tight tracking-tight text-brand-ink">
+                    {item.title}
+                  </h3>
+
+                  <p className="mt-3 text-sm leading-relaxed text-brand-muted">
+                    {item.text}
+                  </p>
+
+                  <div className="mt-5 flex items-center gap-3 rounded-2xl bg-[#fde7ef] px-4 py-3.5">
+                    <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-gradient-to-br from-brand-primary to-brand-secondary text-white shadow-sm">
+                      <Check className="h-4 w-4" strokeWidth={3} aria-hidden />
+                    </span>
+                    <span className="text-sm font-semibold leading-snug text-brand-ink">
+                      {item.highlight}
+                    </span>
+                  </div>
                 </div>
-                <h3 className="mt-4 font-display text-lg font-bold text-brand-ink">{item.title}</h3>
-                <p className="mt-2 text-sm leading-relaxed text-brand-muted">{item.text}</p>
-              </div>
+
+                <div className="relative mt-auto h-[205px] overflow-hidden">
+                  <Image
+                    src={item.image}
+                    alt=""
+                    fill
+                    sizes="(max-width: 640px) 100vw, (max-width: 1024px) 50vw, 25vw"
+                    className="object-cover transition duration-700 group-hover:scale-105"
+                  />
+
+                  <svg
+                    aria-hidden="true"
+                    className="absolute -top-1 left-0 h-16 w-full"
+                    viewBox="0 0 500 80"
+                    preserveAspectRatio="none"
+                  >
+                    <path
+                      d="M0 42C75 70 115 8 190 30C270 55 315 5 385 25C435 40 465 30 500 5V0H0Z"
+                      fill="white"
+                    />
+                  </svg>
+
+                  <div className="absolute inset-0 bg-gradient-to-t from-black/35 via-transparent to-transparent" />
+                </div>
+              </article>
             ))}
+          </div>
+
+          <div className="mx-auto mt-10 flex max-w-4xl flex-wrap items-center justify-center gap-x-8 gap-y-4 rounded-3xl border border-white/70 bg-white/65 px-6 py-5 shadow-sm backdrop-blur-sm">
+            <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-brand-ink">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#fde2ed] text-brand-primary">
+                <HeartHandshake className="h-4 w-4" aria-hidden />
+              </span>
+              Experiências reais
+            </span>
+            <span className="hidden h-7 w-px bg-brand-primary/15 sm:block" />
+            <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-brand-ink">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#fde2ed] text-brand-primary">
+                <Bus className="h-4 w-4" aria-hidden />
+              </span>
+              Viagens em grupo
+            </span>
+            <span className="hidden h-7 w-px bg-brand-primary/15 sm:block" />
+            <span className="flex items-center gap-2 text-xs font-bold uppercase tracking-[0.12em] text-brand-ink">
+              <span className="flex h-9 w-9 items-center justify-center rounded-full bg-[#fde2ed] text-brand-primary">
+                <HeartHandshake className="h-4 w-4" aria-hidden />
+              </span>
+              Conexões para a vida toda
+            </span>
+          </div>
+
+          {/* Ondas decorativas na transição para avaliações */}
+          <div
+            aria-hidden="true"
+            className="pointer-events-none relative left-1/2 mt-10 w-screen -translate-x-1/2"
+          >
+            <svg
+              className="block h-24 w-full"
+              viewBox="0 0 1440 120"
+              preserveAspectRatio="none"
+              fill="none"
+            >
+              <path
+                d="M0 68C180 125 300 15 500 62C700 109 805 18 1000 55C1170 87 1300 45 1440 18V120H0Z"
+                fill="white"
+                fillOpacity="0.72"
+              />
+              <path
+                d="M0 90C190 135 330 38 520 80C720 124 860 38 1040 72C1200 102 1310 72 1440 42V120H0Z"
+                fill="#E84C91"
+                fillOpacity="0.10"
+              />
+              <path
+                d="M0 105C190 145 350 72 540 101C760 135 900 70 1080 94C1230 114 1340 95 1440 76V120H0Z"
+                fill="#F28C28"
+                fillOpacity="0.12"
+              />
+            </svg>
           </div>
         </div>
       </section>
@@ -288,39 +435,25 @@ export default async function HomePage() {
         </div>
       </section>
 
-      {/* Galeria */}
-      <section className="section-pad">
-        <div className="container-page">
-          <div className="max-w-xl">
-            <p className="eyebrow">Experiências</p>
-            <h2 className="section-title mt-2">Galeria de momentos</h2>
-            <p className="section-lead">
-              Praias, centros históricos e dias especiais com a cara de{" "}
-              {brand.companyName}.
-            </p>
-          </div>
+      {/* Galeria — fotos reais dos viajantes */}
+      {clientGallery.length > 0 && (
+        <section className="section-pad">
+          <div className="container-page">
+            <div className="max-w-xl">
+              <p className="eyebrow">Momentos reais</p>
+              <h2 className="section-title mt-2">
+                Momentos dos nossos viajantes
+              </h2>
+              <p className="section-lead">
+                Fotos compartilhadas por quem já viveu uma experiência com a{" "}
+                {brand.companyName}.
+              </p>
+            </div>
 
-          <div className="mt-10 grid gap-4 md:grid-cols-3">
-            {gallery.map((item, index) => (
-              <div
-                key={`${item.src}-${index}`}
-                className="relative aspect-[4/5] overflow-hidden rounded-2xl bg-brand-tint shadow-card transition duration-300 hover:shadow-lift sm:aspect-[5/4] md:aspect-[4/5]"
-              >
-                <Image
-                  src={item.src}
-                  alt={item.label}
-                  fill
-                  sizes="(max-width: 768px) 100vw, 33vw"
-                  className="object-cover"
-                />
-                <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/60 to-transparent p-4 pt-16">
-                  <p className="text-sm font-semibold text-white">{item.label}</p>
-                </div>
-              </div>
-            ))}
+            <ClientGalleryCarousel items={clientGallery} />
           </div>
-        </div>
-      </section>
+        </section>
+      )}
 
       {/* CTA final */}
       <section className="pb-16 md:pb-20">
