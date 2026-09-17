@@ -94,7 +94,6 @@ export default async function TripDetailPage({
               <p>
                 <span className="font-semibold">Retorno:</span>{" "}
                 {formatTripReturn(trip)}
-                {trip.returnTime ? ` às ${formatTime(trip.returnTime)}` : ""}
               </p>
             </div>
             <p className="mt-2 text-sm text-brand-muted">{trip.destination}</p>
@@ -173,7 +172,13 @@ export default async function TripDetailPage({
 
         <div className="mt-12 grid gap-5 md:grid-cols-2">
           <Section title="Descrição" body={trip.description} />
-          <Section title="Roteiro" body={trip.itinerary} />
+
+          {trip.itineraryDays && trip.itineraryDays.length > 0 ? (
+            <ItinerarySection days={trip.itineraryDays} />
+          ) : (
+            <Section title="Roteiro" body={trip.itinerary} />
+          )}
+
           <Section title="Incluso" body={trip.included} />
           <Section title="Não incluso" body={trip.notIncluded} />
           <Section title="Regras" body={trip.rules} />
@@ -250,6 +255,70 @@ export default async function TripDetailPage({
             <ReviewForm tripId={trip.id} />
           </div>
         )}
+      </div>
+    </div>
+  );
+}
+
+function ItinerarySection({
+  days,
+}: {
+  days: NonNullable<import("@/types").Trip["itineraryDays"]>;
+}) {
+  const weekdayFormatter = new Intl.DateTimeFormat("pt-BR", {
+    weekday: "long",
+  });
+
+  const dateFormatter = new Intl.DateTimeFormat("pt-BR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    timeZone: "UTC",
+  });
+
+  return (
+    <div className="surface-card p-6">
+      <h2 className="font-display text-2xl font-bold text-brand-ink">
+        Roteiro por dia
+      </h2>
+
+      <div className="mt-5 space-y-5">
+        {days.map((day, index) => {
+          const date = new Date(`${day.date}T00:00:00Z`);
+          const weekday = weekdayFormatter.format(date);
+          const formattedDate = dateFormatter.format(date);
+
+          return (
+            <div
+              key={day.id}
+              className="relative rounded-2xl border border-brand-line bg-brand-tint/40 p-5"
+            >
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="rounded-full bg-brand-primary px-3 py-1 text-xs font-bold text-white">
+                  Dia {index + 1}
+                </span>
+
+                <span className="text-sm font-semibold capitalize text-brand-primary">
+                  {weekday}
+                </span>
+
+                <span className="text-sm font-medium text-brand-muted">
+                  {formattedDate}
+                </span>
+              </div>
+
+              <h3 className="mt-3 text-lg font-bold text-brand-ink">
+                {day.title}
+              </h3>
+
+              {day.description && (
+                <p className="mt-2 whitespace-pre-line text-sm leading-relaxed text-brand-muted">
+                  {day.description}
+                </p>
+              )}
+            </div>
+          );
+        })}
       </div>
     </div>
   );
