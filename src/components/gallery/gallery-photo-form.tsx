@@ -129,7 +129,7 @@ export function GalleryPhotoForm({
   return (
     <form
       onSubmit={submit}
-      className="rounded-3xl bg-white/90 p-5 shadow-card ring-1 ring-black/5"
+      className="rounded-3xl bg-white/90 p-6 shadow-card ring-1 ring-black/5 sm:p-7"
     >
       <div>
         <p className="font-[family-name:var(--font-display)] text-xl font-bold text-brand-ink">
@@ -141,7 +141,7 @@ export function GalleryPhotoForm({
         </p>
       </div>
 
-      <label className="mt-5 block">
+      <label className="mt-6 block">
         <span className="text-sm font-semibold text-brand-ink">
           Qual viagem?
         </span>
@@ -159,7 +159,7 @@ export function GalleryPhotoForm({
         </select>
       </label>
 
-      <div className="mt-5">
+      <div className="mt-6">
         <span className="text-sm font-semibold text-brand-ink">
           Sua foto
         </span>
@@ -185,7 +185,7 @@ export function GalleryPhotoForm({
       </div>
 
       {preview && (
-        <div className="mt-4 overflow-hidden rounded-2xl bg-brand-tint">
+        <div className="mt-5 overflow-hidden rounded-2xl bg-brand-tint">
           <div className="relative aspect-[4/3] w-full">
             <Image
               src={preview}
@@ -198,7 +198,7 @@ export function GalleryPhotoForm({
         </div>
       )}
 
-      <label className="mt-5 block">
+      <label className="mt-6 block">
         <span className="text-sm font-semibold text-brand-ink">
           Legenda
         </span>
@@ -231,7 +231,7 @@ export function GalleryPhotoForm({
       <button
         type="submit"
         disabled={pending}
-        className="mt-4 w-full rounded-full bg-brand-primary px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:bg-brand-deep disabled:cursor-not-allowed disabled:opacity-50"
+        className="mt-6 w-full rounded-full bg-gradient-to-r from-brand-primary to-brand-secondary px-5 py-3 text-sm font-bold text-white shadow-sm transition hover:brightness-[1.06] disabled:cursor-not-allowed disabled:opacity-50"
       >
         {pending ? "Enviando foto..." : "Enviar foto para aprovação"}
       </button>

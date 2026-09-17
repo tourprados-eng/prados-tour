@@ -4,6 +4,7 @@ import { existsSync } from "fs";
 import path from "path";
 import { getTripBySlug } from "@/lib/booking/actions";
 import { formatCurrency, formatDate } from "@/lib/utils";
+import { tripCategoryLabel } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { getSession } from "@/lib/auth/session";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
@@ -76,7 +77,7 @@ export default async function TripDetailPage({
           </div>
 
           <div className="min-w-0">
-            <p className="eyebrow">{trip.category}</p>
+            <p className="eyebrow">{tripCategoryLabel(trip.category)}</p>
             <h1 className="mt-2 font-display text-4xl font-bold tracking-tight text-brand-ink md:text-5xl">
               {trip.name}
             </h1>

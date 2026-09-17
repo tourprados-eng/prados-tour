@@ -1,6 +1,6 @@
 import bcrypt from "bcryptjs";
 import { v4 as uuid } from "uuid";
-import type { DataStore } from "@/types";
+import type { DataStore, Trip } from "@/types";
 
 const PASSWORD = "Prados@123";
 
@@ -160,13 +160,13 @@ export async function createSeedStore(): Promise<DataStore> {
     },
   ];
 
-  const trips = [
+  const trips: Trip[] = [
     {
       id: trip1,
       name: "Ilhabela",
       slug: "ilhabela",
       destination: "Ilhabela - SP",
-      category: "Praia",
+      category: "PRAIA",
       date: "2026-09-06",
       departureDate: "2026-09-06",
       departureTime: "22:10",
@@ -199,7 +199,7 @@ export async function createSeedStore(): Promise<DataStore> {
       name: "Guarujá",
       slug: "guaruja",
       destination: "Guarujá - SP",
-      category: "Praia",
+      category: "PRAIA",
       date: "2026-09-20",
       departureDate: "2026-09-20",
       departureTime: "05:00",
@@ -230,7 +230,7 @@ export async function createSeedStore(): Promise<DataStore> {
       name: "Paraty Histórica",
       slug: "paraty-historica",
       destination: "Paraty - RJ",
-      category: "Turismo cultural",
+      category: "CIDADE_TURISMO",
       date: "2026-10-11",
       departureDate: "2026-10-11",
       departureTime: "23:00",

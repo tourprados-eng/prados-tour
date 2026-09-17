@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { registerAction } from "@/lib/auth/actions";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/form";
@@ -9,6 +10,9 @@ import { Input, Label } from "@/components/ui/form";
 export function RegisterForm() {
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next");
+  const nextQuery = next ? `?next=${encodeURIComponent(next)}` : "";
 
   return (
     <div className="surface-card p-6 sm:p-8">
@@ -30,6 +34,7 @@ export function RegisterForm() {
           });
         }}
       >
+        <input type="hidden" name="next" value={next ?? ""} />
         <div className="sm:col-span-2">
           <Label htmlFor="fullName">Nome completo</Label>
           <Input id="fullName" name="fullName" required />
@@ -82,7 +87,7 @@ export function RegisterForm() {
 
       <p className="mt-6 text-sm text-brand-muted">
         Já tem conta?{" "}
-        <Link href="/login" className="font-semibold text-brand-primary hover:underline">
+        <Link href={`/login${nextQuery}`} className="font-semibold text-brand-primary hover:underline">
           Entrar
         </Link>
       </p>

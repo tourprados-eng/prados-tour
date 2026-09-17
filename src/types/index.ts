@@ -14,6 +14,14 @@ export type TripStatus =
   | "FINALIZADA"
   | "ARQUIVADA";
 
+/** Categoria padronizada das excursões (usada para o filtro público). */
+export type TripCategory =
+  | "PRAIA"
+  | "PARQUE"
+  | "CIDADE_TURISMO"
+  | "NATUREZA"
+  | "OUTROS";
+
 export type BookingStatus = "PENDENTE" | "CONFIRMADA" | "CANCELADA" | "CONCLUIDA";
 export type PaymentStatus = "PENDENTE" | "PAGO" | "ESTORNADO" | "CANCELADO" | "ATRASADO";
 export type PaymentMethod = "PIX" | "CARTAO";
@@ -48,7 +56,7 @@ export interface Trip {
   name: string;
   slug: string;
   destination: string;
-  category: string;
+  category: TripCategory;
   date: string;
   departureDate: string | null;
   departureTime: string | null;

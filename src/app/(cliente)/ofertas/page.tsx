@@ -27,7 +27,7 @@ export default async function OffersPage() {
         </div>
 
         <div className="mt-10">
-          <OffersGrid trips={trips} />
+          <OffersGrid trips={trips} showEmptyButton={false} />
         </div>
 
         <div className="mt-10">

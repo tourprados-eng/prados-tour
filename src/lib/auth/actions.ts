@@ -15,7 +15,7 @@ import {
   registerWithSupabase,
   resendSupabaseSignupConfirmation,
 } from "@/lib/auth/supabase-actions";
-import { isValidCpf, onlyDigits } from "@/lib/utils";
+import { isValidCpf, onlyDigits, safeInternalRedirectPath } from "@/lib/utils";
 import type { AppRole } from "@/types";
 
 const blockedTestNames = new Set([
@@ -128,6 +128,7 @@ export async function loginAction(formData: FormData): Promise<{ error: string }
     .trim()
     .toLowerCase();
   const password = String(formData.get("password") || "");
+  const next = safeInternalRedirectPath(formData.get("next"));
 
   if (getAuthDriver() === "supabase") {
     const result = await authenticateWithEmailPassword(email, password);
@@ -139,7 +140,7 @@ export async function loginAction(formData: FormData): Promise<{ error: string }
     }
     const session = await getSession();
     if (!session) return { error: "E-mail ou senha inválidos." };
-    redirect(homeForRole(session.role));
+    redirect(next ?? homeForRole(session.role));
   }
 
   const store = await getRepositoryRuntime().read();
@@ -155,10 +156,11 @@ export async function loginAction(formData: FormData): Promise<{ error: string }
     fullName: user.fullName,
     role: user.role,
   });
-  redirect(homeForRole(user.role));
+  redirect(next ?? homeForRole(user.role));
 }
 
 export async function registerAction(formData: FormData): Promise<{ error: string } | void> {
+  const next = safeInternalRedirectPath(formData.get("next"));
   const parsed = registerSchema.safeParse({
     fullName: formData.get("fullName"),
     cpf: formData.get("cpf"),
@@ -190,7 +192,7 @@ export async function registerAction(formData: FormData): Promise<{ error: strin
     } catch (e) {
       return { error: e instanceof Error ? e.message : "Erro ao cadastrar." };
     }
-    redirect("/confirmar-email");
+    redirect(next ? `/confirmar-email?next=${encodeURIComponent(next)}` : "/confirmar-email");
   }
 
   let userId = "";
@@ -262,7 +264,7 @@ export async function registerAction(formData: FormData): Promise<{ error: strin
     fullName: userName,
     role: userRole,
   });
-  redirect("/minhas-viagens");
+  redirect(next ?? "/minhas-viagens");
 }
 
 export async function logoutAction() {

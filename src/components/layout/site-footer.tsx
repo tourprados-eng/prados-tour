@@ -225,7 +225,14 @@ export function SiteFooter({ brand }: { brand: BrandSettings }) {
 
               <li className="flex items-center gap-3">
                 <InstagramIcon className="h-5 w-5 shrink-0 text-brand-primary" />
-                <span>Instagram: @{brand.instagram}</span>
+                <Link
+                  href={`https://instagram.com/${brand.instagram}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:underline"
+                >
+                  Instagram: @{brand.instagram}
+                </Link>
               </li>
 
               <li className="flex items-center gap-3">
@@ -412,10 +419,15 @@ export function SiteFooter({ brand }: { brand: BrandSettings }) {
 
           <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
             <div className="flex flex-wrap items-center gap-x-6 gap-y-2">
-              <span className="flex items-center gap-2">
+              <Link
+                href={`https://instagram.com/${brand.instagram}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="flex items-center gap-2 hover:underline"
+              >
                 <InstagramIcon className="h-4 w-4" />
                 @{brand.instagram}
-              </span>
+              </Link>
 
               <span className="flex items-center gap-2">
                 <WhatsAppIcon className="h-4 w-4" />

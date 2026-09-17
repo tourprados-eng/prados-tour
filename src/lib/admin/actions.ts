@@ -10,6 +10,7 @@ import { revalidatePath } from "next/cache";
 import { getSession, canAccess } from "@/lib/auth/session";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import { getAuthDriver, assertSupabaseServerConfiguration } from "@/lib/supabase/config";
+import { normalizeTripCategory } from "@/lib/constants";
 import type { BrandSettings, DataStore, PaymentSettings, Promotion, PromoBannerSettings, Trip, TripStatus, VoucherSettings } from "@/types";
 import { slugify, formatCurrency } from "@/lib/utils";
 
@@ -565,7 +566,11 @@ export async function updateBrandSettings(partial: Partial<BrandSettings>) {
     return { error: "Sem permissão. Apenas o Super Admin pode alterar configurações." };
   await getRepositoryRuntime().transaction((store) => {
     const old = { ...store.brand };
-    store.brand = { ...store.brand, ...partial };
+    const normalized: Partial<BrandSettings> = { ...partial };
+    if (typeof normalized.instagram === "string") {
+      normalized.instagram = normalized.instagram.trim().replace(/^@+/, "");
+    }
+    store.brand = { ...store.brand, ...normalized };
     store.auditLogs.push({
       id: uuid(),
       userId: session.id,
@@ -736,6 +741,8 @@ export async function upsertTrip(data: {
   const session = await getSession();
   if (!session || !canAccess(session.role, "admin")) return { error: "Sem permissão." };
 
+  const category = normalizeTripCategory(data.category);
+
   await getRepositoryRuntime().transaction((store) => {
     const now = new Date().toISOString();
 
@@ -799,7 +806,7 @@ export async function upsertTrip(data: {
       Object.assign(trip, {
         name: data.name,
         destination: data.destination,
-        category: data.category,
+        category,
         date: data.date,
         departureDate: data.departureDate,
         departureTime: data.departureTime,
@@ -866,7 +873,7 @@ export async function upsertTrip(data: {
         name: data.name,
         slug: uniqueTripSlug(slugify(data.name), data.date, store.trips),
         destination: data.destination,
-        category: data.category,
+        category,
         date: data.date,
         departureDate: data.departureDate,
         departureTime: data.departureTime,
