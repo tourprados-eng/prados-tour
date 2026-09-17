@@ -128,10 +128,29 @@ const COLLECTION_KEYS = Object.keys(COLLECTION_TABLE);
  * UPSERT: pais antes dos filhos (evita violação de FK ao inserir).
  */
 const DELETE_ORDER = [
-  "auditLogs", "notifications", "referrals", "loyaltyPoints", "reviews", "galleryPhotos",
-  "expenses", "checkins", "couponUsages", "promotionUsages", "installments", "payments",
-  "passengers", "seats", "commissions", "bookings", "sellers",
-  "tripBoardingPoints", "boardingPoints", "trips", "promotions", "profiles",
+  "auditLogs",
+  "notifications",
+  "referrals",
+  "loyaltyPoints",
+  "reviews",
+  "galleryPhotos",
+  "expenses",
+  "checkins",
+  "couponUsages",
+  "promotionUsages",
+  "installments",
+  "payments",
+  "passengers",
+  "seats",
+  "commissions",
+  "bookings",
+  "sellers",
+  "tripBoardingPoints",
+  "boardingPoints",
+  "trips",
+  "coupons",
+  "promotions",
+  "profiles",
 ];
 
 const UPSERT_ORDER = [...DELETE_ORDER].reverse();
