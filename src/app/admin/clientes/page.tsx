@@ -4,7 +4,12 @@ import DeleteClientButton from "@/components/admin/delete-client-button";
 
 export default async function AdminClientsPage() {
   const store = await getRepositoryRuntime().read();
-  const clients = store.profiles.filter((p) => p.role === "CLIENTE");
+  const clients = store.profiles.filter(
+    (p) =>
+      p.role === "CLIENTE" &&
+      p.customerClass !== "INATIVO" &&
+      !p.email.toLowerCase().endsWith("@deleted.local"),
+  );
 
   const clientHasHistory = (clientId: string) =>
     store.bookings.some((b) => b.customerId === clientId) ||
