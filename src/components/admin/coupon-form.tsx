@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { Save, ArrowLeft } from "lucide-react";
 import { upsertCoupon } from "@/lib/admin/actions";
+import { formatTripDepartureDate } from "@/lib/utils";
 import type { Coupon, Trip } from "@/types";
 
 function toLocalInput(value?: string | null) {
@@ -241,7 +242,7 @@ export default function CouponForm({
                         {trip.name}
                       </span>
                       <span className="block text-xs text-[#77666e]">
-                        {trip.date} · R$ {trip.pricePerson}
+                        {formatTripDepartureDate(trip)} · R$ {trip.pricePerson}
                       </span>
                     </span>
                   </label>

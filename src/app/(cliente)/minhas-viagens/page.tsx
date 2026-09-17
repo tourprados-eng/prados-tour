@@ -2,7 +2,7 @@ import Link from "next/link";
 import { BusFront, Luggage, MapPin, Shell, ShieldCheck, Sparkles, Users } from "lucide-react";
 import { requireUser } from "@/lib/auth/actions";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatTripDepartureDate } from "@/lib/utils";
 import { PhotoShareCard } from "@/components/gallery/photo-share-card";
 import { HomeHero } from "@/components/home/hero";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,7 @@ const emptyBenefits = [
 
 function BookingCard({ booking, trip }: { booking: Booking; trip: Trip | undefined }) {
   const tripName = trip?.name ?? "Destino indisponível";
-  const tripDate = trip ? formatDate(trip.date) : "—";
+  const tripDate = trip ? formatTripDepartureDate(trip) : "—";
   const passengers =
     booking.quantity === 1 ? "1 passageiro" : `${booking.quantity} passageiros`;
 
@@ -67,12 +67,12 @@ export default async function MyTripsPage() {
   }));
 
   const upcoming = entries
-    .filter(({ trip }) => trip && trip.date >= today)
-    .sort((a, b) => a.trip!.date.localeCompare(b.trip!.date));
+    .filter(({ trip }) => trip && (trip.departureDate ?? trip.date) >= today)
+    .sort((a, b) => (a.trip!.departureDate ?? a.trip!.date).localeCompare(b.trip!.departureDate ?? b.trip!.date));
 
   const history = entries
-    .filter(({ trip }) => !trip || trip.date < today)
-    .sort((a, b) => (b.trip?.date ?? "").localeCompare(a.trip?.date ?? ""));
+    .filter(({ trip }) => !trip || (trip.departureDate ?? trip.date) < today)
+    .sort((a, b) => (b.trip?.departureDate ?? b.trip?.date ?? "").localeCompare(a.trip?.departureDate ?? a.trip?.date ?? ""));
 
   const eligibleTrips = store.trips
     .filter(
@@ -84,7 +84,8 @@ export default async function MyTripsPage() {
     .map((trip) => ({
       id: trip.id,
       name: trip.name,
-      date: formatDate(trip.date),
+      date: trip.date,
+      departureDate: trip.departureDate,
     }));
 
   return (

@@ -51,6 +51,13 @@ export interface Profile {
   updatedAt: string;
 }
 
+export interface TripItineraryDay {
+  id: string;
+  date: string;
+  title: string;
+  description: string;
+}
+
 export interface Trip {
   id: string;
   name: string;
@@ -73,6 +80,7 @@ export interface Trip {
   totalSeats: number;
   description: string;
   itinerary: string;
+  itineraryDays?: TripItineraryDay[];
   included: string;
   notIncluded: string;
   rules: string;

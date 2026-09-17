@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createBookingAction, previewBookingPriceAction } from "@/lib/booking/actions";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/form";
-import { formatCurrency, isValidCpf } from "@/lib/utils";
+import { formatCurrency, formatTime, formatTripDepartureDate, formatTripReturn, isValidCpf } from "@/lib/utils";
 import { passengerCategory } from "@/lib/pricing";
 import { SELLER_CODE_STORAGE_KEY } from "@/components/layout/seller-tracker";
 import type { BoardingPoint, Trip } from "@/types";
@@ -305,17 +305,9 @@ export function CheckoutWizard({
           "DADOS DA RESERVA",
           `Reserva: ${result.reference}`,
           `Viagem: ${trip.name}`,
-          `Saída: ${new Date(`${trip.date}T12:00:00`).toLocaleDateString("pt-BR")}${trip.departureTime ? ` às ${trip.departureTime}` : ""}`,
+          `Saída: ${formatTripDepartureDate(trip)}${trip.departureTime ? ` às ${formatTime(trip.departureTime)}` : ""}`,
           ...(trip.returnDate || trip.returnTime
-            ? [
-                `Retorno: ${
-                  trip.returnDate
-                    ? new Date(`${trip.returnDate}T12:00:00`).toLocaleDateString(
-                        "pt-BR",
-                      )
-                    : ""
-                }${trip.returnTime ? ` às ${trip.returnTime}` : ""}`,
-              ]
+            ? [`Retorno: ${formatTripReturn(trip)}`]
             : []),
           `Passageiros: ${quantity}`,
           `Ponto de embarque: ${boarding.find((b) => b.point.id === boardingPointId)?.point.name ?? ""}`,
@@ -571,7 +563,7 @@ export function CheckoutWizard({
             >
               {boarding.map((b) => (
                 <option key={b.id} value={b.point.id}>
-                  {b.point.name} — {b.time}
+                  {b.point.name} — {formatTime(b.time)}
                 </option>
               ))}
             </Select>

@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx";
 import { twMerge } from "tailwind-merge";
+import type { Trip } from "@/types";
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs));
@@ -15,6 +16,50 @@ export function formatCurrency(value: number) {
 export function formatDate(value: string) {
   const [y, m, d] = value.split("-").map(Number);
   return new Intl.DateTimeFormat("pt-BR").format(new Date(y, m - 1, d));
+}
+
+/** Data de saída efetiva da viagem, conforme cadastrada no Admin. */
+export function tripDepartureDate(
+  trip: Pick<Trip, "date" | "departureDate">,
+): string | null {
+  return trip.departureDate;
+}
+
+/** Data de retorno efetiva, conforme cadastrada no Admin. Sem retorno, null. */
+export function tripReturnDate(
+  trip: Pick<Trip, "returnDate">,
+): string | null {
+  return trip.returnDate ?? null;
+}
+
+/**
+ * Formata a data de saída para exibição pública. Sem valor cadastrado no
+ * Admin, retorna "—" (nunca inventa uma data).
+ */
+export function formatTripDepartureDate(
+  trip: Pick<Trip, "date" | "departureDate">,
+): string {
+  return formatDate(trip.departureDate ?? trip.date);
+}
+
+/**
+ * Formata a data de retorno para exibição pública. Sem retorno cadastrado,
+ * exibe apenas o horário (se houver) ou nada — nunca assume o mesmo dia.
+ */
+export function formatTripReturn(
+  trip: Pick<Trip, "returnDate" | "returnTime">,
+): string {
+  const parts: string[] = [];
+  if (trip.returnDate) parts.push(formatDate(trip.returnDate));
+  if (trip.returnTime) parts.push(formatTime(trip.returnTime));
+  return parts.join(" às ");
+}
+
+/** Exibe horário "HH:mm", ignorando segundos vindos do Postgres (HH:mm:ss). */
+export function formatTime(value: string | null | undefined) {
+  if (!value) return "";
+  const match = value.trim().match(/^(\d{2}:\d{2})/);
+  return match ? match[1] : value.trim();
 }
 
 export function formatDateTime(value: string) {

@@ -4,11 +4,13 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
 import { createGalleryPhotoAction } from "@/lib/gallery/actions";
+import { formatTripDepartureDate } from "@/lib/utils";
 
 type TripOption = {
   id: string;
   name: string;
   date: string;
+  departureDate: string | null;
 };
 
 export function GalleryPhotoForm({
@@ -153,7 +155,7 @@ export function GalleryPhotoForm({
         >
           {trips.map((trip) => (
             <option key={trip.id} value={trip.id}>
-              {trip.name} · {trip.date}
+              {trip.name} · {formatTripDepartureDate(trip)}
             </option>
           ))}
         </select>

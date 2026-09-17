@@ -6,6 +6,7 @@ import { ArrowLeft, CheckCircle2, UserRound } from "lucide-react";
 import { lookupCheckinBooking, performCheckin } from "@/lib/admin/actions";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/form";
+import { formatTime, formatTripDepartureDate } from "@/lib/utils";
 
 type PassengerRow = {
   id: string;
@@ -22,13 +23,14 @@ type LookupResult = {
     quantity: number;
     customerName: string;
   };
-  trip: { name: string; date: string; departureTime: string } | null;
+  trip: {
+    name: string;
+    date: string;
+    departureDate: string | null;
+    departureTime: string | null;
+  } | null;
   passengers: PassengerRow[];
 };
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("pt-BR").format(new Date(value));
-}
 
 export default function CheckInPage() {
   const [reference, setReference] = useState("");
@@ -152,7 +154,7 @@ export default function CheckInPage() {
                 </p>
                 <p className="text-sm text-black/55">
                   {result.trip
-                    ? `${formatDate(result.trip.date)} · saída ${result.trip.departureTime}`
+                    ? `${formatTripDepartureDate(result.trip)} · saída ${formatTime(result.trip.departureTime)}`
                     : ""}
                 </p>
               </div>

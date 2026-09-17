@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation";
 import { getSession, canAccess } from "@/lib/auth/session";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
-import { formatDate } from "@/lib/utils";
+import { formatTime, formatTripDepartureDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
 export default async function OperationalPage() {
@@ -47,7 +47,7 @@ export default async function OperationalPage() {
           return (
             <div key={t.id} className="rounded-3xl bg-white/90 p-5 ring-1 ring-black/5">
               <p className="font-bold">
-                {t.name} · {formatDate(t.date)}
+                {t.name} · {formatTripDepartureDate(t)}
               </p>
               <p className="text-sm text-black/60">
                 Passageiros: {passengers.length} · Check-ins: {checkins.length}
@@ -55,7 +55,7 @@ export default async function OperationalPage() {
               <ul className="mt-3 text-sm">
                 {boarding.map((b) => (
                   <li key={b.id}>
-                    {b.point.name} — {b.time}
+                    {b.point.name} — {formatTime(b.time)}
                   </li>
                 ))}
               </ul>

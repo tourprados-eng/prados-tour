@@ -1,7 +1,7 @@
 import "server-only";
 
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
-import { formatDate, onlyDigits } from "@/lib/utils";
+import { formatTripDepartureDate, onlyDigits } from "@/lib/utils";
 import type { Trip } from "@/types";
 
 export const DEFAULT_WHATSAPP_MESSAGE =
@@ -28,11 +28,11 @@ export function buildWhatsAppUrl(phone: string, message?: string): string {
  */
 export function withTripInfo(
   message: string,
-  trip?: Pick<Trip, "name" | "date">,
+  trip?: Pick<Trip, "name" | "date" | "departureDate">,
 ): string {
   const base = message.trim() || DEFAULT_WHATSAPP_MESSAGE;
   if (!trip) return base;
-  return `${base}\n\nViagem: ${trip.name} · ${formatDate(trip.date)}`;
+  return `${base}\n\nViagem: ${trip.name} · ${formatTripDepartureDate(trip)}`;
 }
 
 /**

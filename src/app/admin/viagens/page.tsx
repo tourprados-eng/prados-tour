@@ -3,7 +3,7 @@ import TripForm from "@/components/admin/trip-form";
 import DeleteTripButton from "@/components/admin/delete-trip-button";
 import EditTripButton from "@/components/admin/edit-trip-button";
 import ArchiveTripButton from "@/components/admin/archive-trip-button";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatTime, formatTripDepartureDate, formatTripReturn } from "@/lib/utils";
 
 const tripStatusLabels: Record<string, string> = {
   RASCUNHO: "Rascunho",
@@ -25,10 +25,6 @@ function tripStatusClass(status: string) {
   };
 
   return classes[status] || "bg-gray-50 text-gray-700 ring-gray-200";
-}
-
-function formatDate(value: string) {
-  return new Intl.DateTimeFormat("pt-BR").format(new Date(value));
 }
 
 export default async function AdminTripsPage() {
@@ -122,11 +118,13 @@ export default async function AdminTripsPage() {
 
                       <td className="px-6 py-5">
                         <p className="font-semibold">
-                          {formatDate(`${trip.date}T12:00:00`)}
+                          {formatTripDepartureDate(trip)}
                         </p>
                         {trip.departureTime && (
                           <p className="mt-1 text-xs text-black/45">
-                            Saída {trip.departureTime}
+                            {trip.returnDate || trip.returnTime
+                              ? `Saída ${formatTime(trip.departureTime)} · Retorno ${formatTripReturn(trip)}`
+                              : `Saída ${formatTime(trip.departureTime)}`}
                           </p>
                         )}
                       </td>
@@ -200,7 +198,7 @@ export default async function AdminTripsPage() {
 
                       <td className="px-6 py-5">
                         <p className="font-semibold">
-                          {formatDate(`${trip.date}T12:00:00`)}
+                          {formatTripDepartureDate(trip)}
                         </p>
                       </td>
 

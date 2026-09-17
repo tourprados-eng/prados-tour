@@ -249,6 +249,7 @@ export async function lookupCheckinBooking(reference: string) {
       ? {
           name: trip.name,
           date: trip.date,
+          departureDate: trip.departureDate,
           departureTime: trip.departureTime,
         }
       : null,
@@ -724,6 +725,12 @@ export async function upsertTrip(data: {
   totalSeats: number;
   description: string;
   itinerary: string;
+  itineraryDays?: Array<{
+    id: string;
+    date: string;
+    title: string;
+    description: string;
+  }>;
   included: string;
   notIncluded: string;
   rules: string;
@@ -761,7 +768,10 @@ export async function upsertTrip(data: {
       );
     }
 
-    if (data.returnDate && data.returnDate < data.date) {
+    if (
+      data.returnDate &&
+      data.returnDate < (data.departureDate || data.date)
+    ) {
       throw new Error("A data de retorno não pode ser anterior à data de saída.");
     }
 
@@ -823,6 +833,7 @@ export async function upsertTrip(data: {
         totalSeats: data.totalSeats,
         description: data.description,
         itinerary: data.itinerary,
+        itineraryDays: data.itineraryDays ?? [],
         included: data.included,
         notIncluded: data.notIncluded,
         rules: data.rules,

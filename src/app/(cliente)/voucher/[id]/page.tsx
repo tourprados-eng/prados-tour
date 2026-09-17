@@ -2,7 +2,7 @@ import QRCode from "qrcode";
 import { notFound } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
-import { formatCurrency, formatDate, maskCpf } from "@/lib/utils";
+import { formatCurrency, formatTime, formatTripDepartureDate, formatTripReturn, maskCpf } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
 export default async function VoucherPage({
@@ -125,14 +125,12 @@ export default async function VoucherPage({
             <strong>Viagem:</strong> {trip.name}
           </p>
           <p>
-            <strong>Saída:</strong> {formatDate(trip.date)}
-            {trip.departureTime ? ` às ${trip.departureTime}` : ""}
+            <strong>Saída:</strong> {formatTripDepartureDate(trip)}
+            {trip.departureTime ? ` às ${formatTime(trip.departureTime)}` : ""}
           </p>
           {(trip.returnDate || trip.returnTime) && (
             <p>
-              <strong>Retorno:</strong>{" "}
-              {trip.returnDate ? formatDate(trip.returnDate) : ""}
-              {trip.returnTime ? ` às ${trip.returnTime}` : ""}
+              <strong>Retorno:</strong> {formatTripReturn(trip)}
             </p>
           )}
           <p>

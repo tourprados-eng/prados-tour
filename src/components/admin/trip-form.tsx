@@ -9,7 +9,7 @@ import {
   TRIP_CATEGORIES,
   TRIP_CATEGORY_LABELS,
 } from "@/lib/constants";
-import type { Trip, TripBoardingPoint, TripStatus } from "@/types";
+import type { Trip, TripBoardingPoint, TripItineraryDay, TripStatus } from "@/types";
 
 type BoardingPoint = {
   id: string;
@@ -69,6 +69,38 @@ export default function TripForm({
   const [insuranceEnabled, setInsuranceEnabled] = useState(
     trip?.insuranceEnabled ?? false,
   );
+  const [itineraryDays, setItineraryDays] = useState<TripItineraryDay[]>(
+    trip?.itineraryDays ?? [],
+  );
+
+  function addItineraryDay() {
+    setItineraryDays((current) => [
+      ...current,
+      {
+        id: crypto.randomUUID(),
+        date: "",
+        title: "",
+        description: "",
+      },
+    ]);
+  }
+
+  function updateItineraryDay(
+    id: string,
+    field: keyof Omit<TripItineraryDay, "id">,
+    value: string,
+  ) {
+    setItineraryDays((current) =>
+      current.map((day) =>
+        day.id === id ? { ...day, [field]: value } : day,
+      ),
+    );
+  }
+
+  function removeItineraryDay(id: string) {
+    setItineraryDays((current) => current.filter((day) => day.id !== id));
+  }
+
   const inputRef = useRef<HTMLInputElement>(null);
 
   const selectedCount = useMemo(
@@ -248,6 +280,7 @@ export default function TripForm({
       totalSeats: Number(formData.get("totalSeats")),
       description: String(formData.get("description")),
       itinerary: String(formData.get("itinerary")),
+      itineraryDays,
       included: String(formData.get("included")),
       notIncluded: String(formData.get("notIncluded")),
       rules: String(formData.get("rules")),
@@ -800,16 +833,132 @@ export default function TripForm({
 
             <div className="mt-5 grid gap-4 md:grid-cols-2">
               <div>
-                <label className="mb-2 block text-sm font-semibold">
-                  Roteiro *
-                </label>
-                <textarea
+                <div className="mb-3 flex items-start justify-between gap-3">
+                  <div>
+                    <label className="block text-sm font-semibold">
+                      Roteiro por dia
+                    </label>
+                    <p className="mt-1 text-xs text-[#77666e]">
+                      Cadastre cada dia da viagem. O dia da semana será calculado automaticamente pela data.
+                    </p>
+                  </div>
+
+                  <button
+                    type="button"
+                    onClick={addItineraryDay}
+                    className="shrink-0 rounded-xl bg-[#ec3f88] px-4 py-2 text-xs font-bold text-white transition hover:bg-[#d82e73]"
+                  >
+                    + Adicionar dia
+                  </button>
+                </div>
+
+                {itineraryDays.length === 0 ? (
+                  <div className="rounded-2xl border border-dashed border-[#e3d5dc] bg-[#fffafc] p-5 text-center">
+                    <p className="text-sm font-semibold text-[#77666e]">
+                      Nenhum dia cadastrado
+                    </p>
+                    <p className="mt-1 text-xs text-[#9a8a92]">
+                      Clique em “Adicionar dia” para montar o roteiro da viagem.
+                    </p>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {itineraryDays.map((day, index) => (
+                      <div
+                        key={day.id}
+                        className="rounded-2xl border border-[#eadfe4] bg-[#fffafc] p-4"
+                      >
+                        <div className="mb-4 flex items-center justify-between gap-3">
+                          <div>
+                            <span className="text-xs font-bold uppercase tracking-wide text-[#ec3f88]">
+                              Dia {index + 1}
+                            </span>
+                            {day.date && (
+                              <p className="mt-1 text-xs font-medium text-[#77666e]">
+                                {new Intl.DateTimeFormat("pt-BR", {
+                                  weekday: "long",
+                                  timeZone: "UTC",
+                                }).format(new Date(`${day.date}T00:00:00`))}
+                              </p>
+                            )}
+                          </div>
+
+                          <button
+                            type="button"
+                            onClick={() => removeItineraryDay(day.id)}
+                            className="rounded-lg p-2 text-[#b197a2] transition hover:bg-red-50 hover:text-red-500"
+                            title="Remover dia"
+                          >
+                            <Trash2 size={17} />
+                          </button>
+                        </div>
+
+                        <div className="grid gap-4 sm:grid-cols-[180px_1fr]">
+                          <div>
+                            <label className="mb-2 block text-xs font-semibold text-[#77666e]">
+                              Data
+                            </label>
+                            <input
+                              type="date"
+                              value={day.date}
+                              onChange={(event) =>
+                                updateItineraryDay(
+                                  day.id,
+                                  "date",
+                                  event.target.value,
+                                )
+                              }
+                              className="h-11 w-full rounded-xl border border-[#ddd2d8] bg-white px-3 text-sm outline-none focus:border-[#ec3f88]"
+                            />
+                          </div>
+
+                          <div>
+                            <label className="mb-2 block text-xs font-semibold text-[#77666e]">
+                              Título / local
+                            </label>
+                            <input
+                              type="text"
+                              value={day.title}
+                              onChange={(event) =>
+                                updateItineraryDay(
+                                  day.id,
+                                  "title",
+                                  event.target.value,
+                                )
+                              }
+                              placeholder="Ex.: ARRAIAL DO CABO"
+                              className="h-11 w-full rounded-xl border border-[#ddd2d8] bg-white px-3 text-sm outline-none focus:border-[#ec3f88]"
+                            />
+                          </div>
+                        </div>
+
+                        <div className="mt-4">
+                          <label className="mb-2 block text-xs font-semibold text-[#77666e]">
+                            Descrição
+                          </label>
+                          <textarea
+                            value={day.description}
+                            onChange={(event) =>
+                              updateItineraryDay(
+                                day.id,
+                                "description",
+                                event.target.value,
+                              )
+                            }
+                            rows={3}
+                            placeholder="Informe o que acontecerá neste dia..."
+                            className="w-full resize-y rounded-xl border border-[#ddd2d8] bg-white p-3 text-sm leading-6 outline-none focus:border-[#ec3f88]"
+                          />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                <input
+                  type="hidden"
                   name="itinerary"
-                  required
-                  rows={5}
-                  defaultValue={trip?.itinerary ?? ""}
-                  placeholder="Informe o roteiro..."
-                  className="w-full rounded-2xl border border-[#ddd2d8] p-4 text-sm outline-none focus:border-[#ec3f88]"
+                  value={trip?.itinerary ?? ""}
                 />
               </div>
 

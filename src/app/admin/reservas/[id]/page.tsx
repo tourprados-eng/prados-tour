@@ -2,9 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSession, canAccess } from "@/lib/auth/session";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatDate, formatTripDepartureDate } from "@/lib/utils";
 
-function formatDate(value: string | null | undefined) {
+function formatDateTime(value: string | null | undefined) {
   if (!value) return "Não informado";
   return new Intl.DateTimeFormat("pt-BR").format(new Date(value));
 }
@@ -107,7 +107,7 @@ export default async function AdminReservaDetalhesPage({
           </div>
 
           <p className="mt-2 text-sm text-black/50">
-            Criada em {formatDate(booking.createdAt)}
+            Criada em {formatDateTime(booking.createdAt)}
           </p>
         </div>
 
@@ -255,8 +255,8 @@ export default async function AdminReservaDetalhesPage({
               Data
             </p>
             <p className="mt-1 font-semibold">
-              {trip?.date
-                ? formatDate(`${trip.date}T12:00:00`)
+              {trip?.departureDate
+                ? formatTripDepartureDate(trip)
                 : "Não informada"}
             </p>
           </div>

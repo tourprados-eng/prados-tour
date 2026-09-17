@@ -9,6 +9,7 @@ type TripOption = {
   id: string;
   name: string;
   date: string;
+  departureDate: string | null;
 };
 
 /**

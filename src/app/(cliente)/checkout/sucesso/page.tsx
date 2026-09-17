@@ -3,7 +3,7 @@ import QRCode from "qrcode";
 import { notFound } from "next/navigation";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import { getSession } from "@/lib/auth/session";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, formatTripDepartureDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { PixCopyButton } from "@/components/checkout/pix-copy-button";
 import { simulateGatewayConfirm } from "@/lib/booking/actions";
@@ -64,7 +64,7 @@ export default async function CheckoutSuccessPage({
           Reserva {booking.status === "CONFIRMADA" ? "confirmada" : "criada"}
         </h1>
         <p className="mt-2 text-black/60">
-          {booking.reference} · {trip.name} · {formatDate(trip.date)}
+          {booking.reference} · {trip.name} · {formatTripDepartureDate(trip)}
         </p>
 
         <div className="mt-6 space-y-2 text-sm">

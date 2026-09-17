@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { getSession, canAccess } from "@/lib/auth/session";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, formatTripDepartureDate } from "@/lib/utils";
 import DeleteBookingButton from "@/components/admin/delete-booking-button";
 
 type SearchParams = Promise<{
@@ -17,7 +17,7 @@ const statusOptions = [
   { value: "CONCLUIDA", label: "Concluídas" },
 ];
 
-function formatDate(value: string) {
+function formatDateTime(value: string) {
   return new Intl.DateTimeFormat("pt-BR").format(new Date(value));
 }
 
@@ -320,7 +320,7 @@ export default async function AdminReservasPage({
                       <td className="px-6 py-5">
                         <p className="font-bold">{booking.reference}</p>
                         <p className="mt-1 text-xs text-black/45">
-                          {formatDate(booking.createdAt)}
+                          {formatDateTime(booking.createdAt)}
                         </p>
                       </td>
 
@@ -338,8 +338,8 @@ export default async function AdminReservasPage({
                           {trip?.name || "Viagem não encontrada"}
                         </p>
                         <p className="mt-1 text-xs text-black/45">
-                          {trip?.date
-                            ? formatDate(`${trip.date}T12:00:00`)
+                          {trip?.departureDate
+                            ? formatTripDepartureDate(trip)
                             : "Sem data"}
                         </p>
                       </td>

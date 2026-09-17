@@ -8,7 +8,7 @@ import {
   promotionSummary,
   round2,
 } from "@/lib/pricing";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatTime, formatTripDepartureDate } from "@/lib/utils";
 import { tripCategoryLabel } from "@/lib/constants";
 import { TripCover } from "@/components/trips/trip-cover";
 import { Button } from "@/components/ui/button";
@@ -103,7 +103,7 @@ export async function OffersGrid({
                 Oferta especial
               </span>
               <span className="absolute bottom-3 right-3 rounded-full bg-white px-3 py-1.5 text-xs font-extrabold text-brand-ink shadow-sm backdrop-blur-sm">
-                {formatDate(trip.date)}
+                {formatTripDepartureDate(trip)}
               </span>
             </div>
 
@@ -119,8 +119,8 @@ export async function OffersGrid({
                 <p className="flex items-center gap-1.5">
                   <CalendarDays className="h-4 w-4 shrink-0 text-brand-primary" aria-hidden />
                   <span className="min-w-0 truncate">
-                    {formatDate(trip.date)}
-                    {trip.departureTime ? ` às ${trip.departureTime}` : ""}
+                    {formatTripDepartureDate(trip)}
+                    {trip.departureTime ? ` às ${formatTime(trip.departureTime)}` : ""}
                   </span>
                 </p>
                 {boarding && (
@@ -128,7 +128,7 @@ export async function OffersGrid({
                     <MapPin className="h-4 w-4 shrink-0 text-brand-primary" aria-hidden />
                     <span className="min-w-0 truncate">
                       Saída {boarding.name}
-                      {boarding.time ? ` às ${boarding.time}` : ""}
+                      {boarding.time ? ` às ${formatTime(boarding.time)}` : ""}
                     </span>
                   </p>
                 )}

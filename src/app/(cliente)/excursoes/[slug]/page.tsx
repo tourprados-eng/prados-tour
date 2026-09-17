@@ -3,7 +3,7 @@ import Link from "next/link";
 import { existsSync } from "fs";
 import path from "path";
 import { getTripBySlug } from "@/lib/booking/actions";
-import { formatCurrency, formatDate } from "@/lib/utils";
+import { formatCurrency, formatDate, formatTime, formatTripDepartureDate, formatTripReturn } from "@/lib/utils";
 import { tripCategoryLabel } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { getSession } from "@/lib/auth/session";
@@ -81,11 +81,22 @@ export default async function TripDetailPage({
             <h1 className="mt-2 font-display text-4xl font-bold tracking-tight text-brand-ink md:text-5xl">
               {trip.name}
             </h1>
-            <p className="mt-3 text-base text-brand-muted md:text-lg">
-              {trip.returnDate
-                ? `Saída ${formatDate(trip.date)} às ${trip.departureTime} · Retorno ${formatDate(trip.returnDate)} às ${trip.returnTime}`
-                : `${formatDate(trip.date)} · saída ${trip.departureTime} · retorno ${trip.returnTime}`}
-            </p>
+            <div className="mt-3 space-y-1 text-base text-brand-muted md:text-lg">
+              <p>
+                <span className="font-semibold">Dia da viagem:</span>{" "}
+                {formatDate(trip.date)}
+              </p>
+              <p>
+                <span className="font-semibold">Saída:</span>{" "}
+                {formatTripDepartureDate(trip)}
+                {trip.departureTime ? ` às ${formatTime(trip.departureTime)}` : ""}
+              </p>
+              <p>
+                <span className="font-semibold">Retorno:</span>{" "}
+                {formatTripReturn(trip)}
+                {trip.returnTime ? ` às ${formatTime(trip.returnTime)}` : ""}
+              </p>
+            </div>
             <p className="mt-2 text-sm text-brand-muted">{trip.destination}</p>
 
             <div className="mt-6 rounded-2xl border border-brand-line bg-white p-5 shadow-card">
@@ -192,7 +203,7 @@ export default async function TripDetailPage({
                   <p className="font-semibold text-brand-ink">{b.point.name}</p>
                   <p className="text-sm text-brand-muted">{b.point.address}</p>
                 </div>
-                <p className="shrink-0 text-base font-bold text-brand-primary">{b.time}</p>
+                <p className="shrink-0 text-base font-bold text-brand-primary">{formatTime(b.time)}</p>
               </li>
             ))}
           </ul>
