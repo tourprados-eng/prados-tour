@@ -75,8 +75,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ ok: false, retry: true }, { status: 503 });
     }
     return NextResponse.json({ ok: true });
-  } catch {
-    console.error("Falha ao processar evento do Asaas");
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "Erro desconhecido";
+    console.error("[ASAAS WEBHOOK] Falha ao processar evento:", message);
     return NextResponse.json({ error: "Internal" }, { status: 500 });
   }
 }
