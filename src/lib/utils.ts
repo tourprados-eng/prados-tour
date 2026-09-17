@@ -14,8 +14,26 @@ export function formatCurrency(value: number) {
 }
 
 export function formatDate(value: string) {
-  const [y, m, d] = value.split("-").map(Number);
-  return new Intl.DateTimeFormat("pt-BR").format(new Date(y, m - 1, d));
+  const datePart = value.trim().slice(0, 10);
+  const match = datePart.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+
+  if (!match) return "—";
+
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const date = new Date(year, month - 1, day);
+
+  if (
+    Number.isNaN(date.getTime()) ||
+    date.getFullYear() !== year ||
+    date.getMonth() !== month - 1 ||
+    date.getDate() !== day
+  ) {
+    return "—";
+  }
+
+  return new Intl.DateTimeFormat("pt-BR").format(date);
 }
 
 /** Data de saída efetiva da viagem, conforme cadastrada no Admin. */
