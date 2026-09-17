@@ -1,7 +1,7 @@
 import Link from "next/link";
 import { ArrowRight, CalendarDays, MapPin, Star } from "lucide-react";
 import type { Trip } from "@/types";
-import { formatCurrency, formatTripDepartureDate } from "@/lib/utils";
+import { formatCurrency, formatDate } from "@/lib/utils";
 import { tripCategoryLabel } from "@/lib/constants";
 import { TripCover } from "@/components/trips/trip-cover";
 
@@ -30,7 +30,7 @@ export function TripCard({ trip }: { trip: Trip }) {
 
         <span className="absolute bottom-3 right-3 inline-flex items-center gap-1.5 rounded-full bg-brand-deep/90 px-3 py-1.5 text-xs font-extrabold text-white shadow-sm backdrop-blur-sm ring-1 ring-white/15">
           <CalendarDays className="h-3.5 w-3.5" aria-hidden />
-          {formatTripDepartureDate(trip)}
+          {formatDate(trip.date)}
         </span>
       </div>
 
