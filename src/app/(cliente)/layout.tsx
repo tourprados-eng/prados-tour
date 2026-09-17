@@ -2,6 +2,7 @@ import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import { SiteHeader, MobileNav } from "@/components/layout/site-header";
 import { SiteFooter } from "@/components/layout/site-footer";
 import { SellerTracker } from "@/components/layout/seller-tracker";
+import { WhatsAppFloat } from "@/components/layout/whatsapp-float";
 
 // Depende de sessão autenticada e de dados dinâmicos do repositório; não é
 // estático e não deve ser pré-renderizado em build.
@@ -25,6 +26,7 @@ export default async function ClienteLayout({
       <main className="min-w-0 flex-1 overflow-x-hidden">{children}</main>
       <SiteFooter brand={store.brand} />
       <MobileNav />
+      <WhatsAppFloat />
     </div>
   );
 }

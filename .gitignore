@@ -47,3 +47,20 @@ next-env.d.ts
 # OpenCode backups
 .backup-*/
 .backup-*.tsx
+
+# Backups e cópias temporárias (nunca versionar)
+*.bak
+*.backup
+*-backup
+*.save
+*.before-*
+*schema-before*
+prados-tour-avaliacao/
+prados-tour-avaliacao.zip
+preview/
+src/components/layout/site-footer.tsx.footer-antes-refazer
+
+# Arquivos órfãos criados por redirecionamento acidental no terminal
+1600x900
+next
+prados-tour@0.1.0

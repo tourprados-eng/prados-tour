@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import Link from "next/link";
+import { useSearchParams } from "next/navigation";
 import { loginAction } from "@/lib/auth/actions";
 import { Button } from "@/components/ui/button";
 import { Input, Label } from "@/components/ui/form";
@@ -10,6 +11,9 @@ import { DEMO_PASSWORD_HINT } from "@/lib/constants";
 export function LoginForm() {
   const [error, setError] = useState<string | null>(null);
   const [pending, start] = useTransition();
+  const searchParams = useSearchParams();
+  const next = searchParams.get("next");
+  const nextQuery = next ? `?next=${encodeURIComponent(next)}` : "";
 
   return (
     <div className="surface-card p-6 sm:p-8">
@@ -31,6 +35,7 @@ export function LoginForm() {
           });
         }}
       >
+        <input type="hidden" name="next" value={next ?? ""} />
         <div>
           <Label htmlFor="email">E-mail</Label>
           <Input id="email" name="email" type="email" required placeholder="voce@email.com" />
@@ -57,7 +62,7 @@ export function LoginForm() {
         </p>
         <p>
           Não tem conta?{" "}
-          <Link href="/criar-conta" className="font-semibold text-brand-primary hover:underline">
+          <Link href={`/criar-conta${nextQuery}`} className="font-semibold text-brand-primary hover:underline">
             Criar conta
           </Link>
         </p>

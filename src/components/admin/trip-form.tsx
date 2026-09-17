@@ -4,6 +4,11 @@
 import { useMemo, useRef, useState } from "react";
 import { ImagePlus, MapPin, UploadCloud, Trash2, Lightbulb, Save, ArrowLeft, Star, GripVertical, X } from "lucide-react";
 import { upsertTrip } from "@/lib/admin/actions";
+import {
+  normalizeTripCategory,
+  TRIP_CATEGORIES,
+  TRIP_CATEGORY_LABELS,
+} from "@/lib/constants";
 import type { Trip, TripBoardingPoint, TripStatus } from "@/types";
 
 type BoardingPoint = {
@@ -321,17 +326,14 @@ export default function TripForm({
                 <select
                   name="category"
                   required
-                  defaultValue={trip?.category ?? "Praia"}
+                  defaultValue={normalizeTripCategory(trip?.category)}
                   className="h-12 w-full rounded-xl border border-[#ddd2d8] bg-white px-4 text-sm outline-none focus:border-[#ec3f88]"
                 >
-                  <option>Praia</option>
-                  <option>Parque</option>
-                  <option>Day Use</option>
-                  <option>Trilha</option>
-                  <option>Cachoeira</option>
-                  <option>Turismo religioso</option>
-                  <option>Rota dos vinhos</option>
-                  <option>Outros</option>
+                  {TRIP_CATEGORIES.map((value) => (
+                    <option key={value} value={value}>
+                      {TRIP_CATEGORY_LABELS[value]}
+                    </option>
+                  ))}
                 </select>
               </div>
 

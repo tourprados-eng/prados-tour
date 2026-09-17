@@ -1,11 +1,13 @@
 import Image from "next/image";
 import { ShieldCheck, Bus, Ticket, HeartHandshake, Star, Check } from "lucide-react";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
+import { getSession } from "@/lib/auth/session";
 import { buildWhatsAppUrl } from "@/lib/contact";
 import { Button } from "@/components/ui/button";
 import { ClientGalleryCarousel } from "@/components/gallery/client-gallery-carousel";
 import { TripCard } from "@/components/trips/trip-card";
 import { OffersGrid } from "@/components/promotions/offers-grid";
+import { HomeHero } from "@/components/home/hero";
 import { DEMO_PASSWORD_HINT } from "@/lib/constants";
 
 const benefits = [
@@ -61,10 +63,8 @@ const testimonials = [
   },
 ];
 
-const trustItems = ["Pagamento seguro", "Voucher digital", "Vagas limitadas", "Check-in na viagem"];
-
 export default async function HomePage() {
-  const store = await getRepositoryRuntime().read();
+  const [session, store] = await Promise.all([getSession(), getRepositoryRuntime().read()]);
   const trips = store.trips.filter((t) => t.status === "PUBLICADA" && !t.deletedAt);
   const featured = [...trips]
     .filter((trip) => new Date(trip.date).getTime() >= Date.now())
@@ -95,94 +95,8 @@ export default async function HomePage() {
 
   return (
     <div>
-      {/* Hero — brand gradient, beach vibes */}
-      <section className="relative min-h-[min(92vh,880px)] overflow-hidden bg-brand-deep">
-        <Image
-          src={brand.bannerUrl || "/images/guaruja.png"}
-          alt={`Excursões ${brand.companyName}`}
-          fill
-          priority
-          sizes="100vw"
-          className="object-cover object-center"
-        />
-        <div className="absolute inset-0 bg-gradient-to-r from-brand-deep/95 via-brand-primary/85 to-brand-secondary/50" />
-        <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-brand-bg to-transparent" />
-
-        <div className="container-page relative flex min-h-[min(92vh,880px)] flex-col justify-center py-16 md:py-20">
-          <div className="max-w-2xl text-white">
-            <div className="hero-enter flex items-center gap-3">
-              <span className="shrink-0">
-                <Image
-                  src={brand.logoUrl}
-                  alt={brand.companyName}
-                  width={72}
-                  height={72}
-                  className="h-16 w-16 object-contain drop-shadow-[0_6px_14px_rgba(0,0,0,0.28)] transition duration-300 hover:scale-105"
-                  priority
-                />
-              </span>
-              <p className="font-display text-2xl font-bold tracking-tight text-white drop-shadow-[0_3px_8px_rgba(70,10,45,0.45)] sm:text-3xl">
-                {brand.companyName}
-              </p>
-            </div>
-
-
-
-            <div className="hero-enter-late mt-7 flex flex-wrap gap-2">
-              {["Bate-voltas", "Praias", "Parques", "Viagens em grupo"].map((item) => (
-                <span
-                  key={item}
-                  className="rounded-full bg-gradient-to-r from-brand-primary to-brand-secondary px-3.5 py-1.5 text-xs font-bold text-white shadow-sm transition duration-300 hover:-translate-y-0.5 hover:shadow-md"
-                >
-                  {item}
-                </span>
-              ))}
-            </div>
-
-            <h1 className="hero-enter-delay mt-5 font-display text-[2.35rem] font-bold leading-[1.08] tracking-tight sm:text-5xl md:text-[3.4rem]">
-              Excursões com alegria, cuidado e segurança
-            </h1>
-
-            <p className="hero-enter-late mt-5 max-w-md text-base leading-relaxed text-white/90 sm:text-lg">
-              {brand.siteTagline ||
-                "Reserve praias, parques e bate-voltas com pagamento fácil e voucher digital."}
-            </p>
-
-            <p className="hero-enter-late mt-6 flex max-w-md items-center gap-3 font-display text-lg italic tracking-tight text-[#FFD9E8] sm:text-xl">
-              <span
-                aria-hidden
-                className="h-8 w-1 shrink-0 rounded-full bg-gradient-to-b from-brand-primary to-brand-secondary"
-              />
-              Transformando quilômetros em histórias
-            </p>
-
-            <div className="hero-enter-late mt-8 flex flex-wrap gap-3">
-              <Button href="/excursoes" size="lg" variant="primary">
-                Ver excursões
-              </Button>
-              <Button
-                href="/criar-conta"
-                size="lg"
-                className="bg-brand-deep text-white shadow-[0_5px_18px_rgba(0,0,0,0.28)] transition duration-300 hover:-translate-y-0.5 hover:bg-[#a91f5c] hover:shadow-[0_7px_22px_rgba(0,0,0,0.32)] focus-visible:ring-white"
-              >
-                Criar conta
-              </Button>
-            </div>
-
-            <ul className="hero-enter-late mt-10 flex flex-wrap gap-2">
-              {trustItems.map((item) => (
-                <li
-                  key={item}
-                  className="flex items-center gap-2 rounded-full border border-white/25 bg-brand-deep/35 px-4 py-2 text-xs font-bold text-white shadow-[0_4px_14px_rgba(0,0,0,0.14)] backdrop-blur-md transition duration-300 hover:-translate-y-0.5 hover:bg-brand-deep/45"
-                >
-                  <Check className="h-4 w-4 shrink-0 rounded-full bg-gradient-to-br from-brand-primary to-brand-secondary p-0.5 text-white shadow-sm" strokeWidth={3} aria-hidden />
-                  {item}
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
-      </section>
+      {/* Hero — banner compartilhado com a Home */}
+      <HomeHero brand={brand} signedIn={Boolean(session)} />
 
       {/* Banner de ofertas configurável */}
       {banner.active && (
@@ -251,10 +165,9 @@ export default async function HomePage() {
           <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
             <div>
               <p className="eyebrow">Destaques</p>
-              <h2 className="section-title mt-2">Ofertas em destaque</h2>
+              <h2 className="section-title mt-2">Ofertas da semana</h2>
               <p className="section-lead">
-                Descontos e preços especiais aplicados automaticamente na
-                reserva.
+                Condições especiais para você viajar mais.
               </p>
             </div>
             <Button href="/ofertas" variant="soft">

@@ -2,6 +2,7 @@ import { promises as fs } from "fs";
 import path from "path";
 import { randomUUID } from "crypto";
 import { createSeedStore } from "./seed";
+import { normalizeTripCategory } from "@/lib/constants";
 import type { DataStore } from "@/types";
 
 const DATA_DIR = path.join(process.cwd(), ".data");
@@ -15,6 +16,7 @@ function normalizeStore(store: DataStore): DataStore {
 
   // Normaliza viagens com campos novos (compatibilidade com store.json antigo).
   for (const trip of store.trips ?? []) {
+    trip.category = normalizeTripCategory(trip.category);
     trip.childPrice ??= 0;
     trip.childMaxAge ??= 5;
     trip.childUnder5FreeWithTwoAdults ??= false;

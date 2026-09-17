@@ -173,7 +173,7 @@ export async function createBookingAction(input: CheckoutInput) {
       if (!trip || trip.status !== "PUBLICADA" || trip.deletedAt) {
         throw new Error("Viagem indisponível.");
       }
-      if (trip.date < new Date().toISOString().slice(0, 10)) {
+      if (isPastTrip(trip.date)) {
         throw new Error("Data da viagem inválida.");
       }
       if (input.quantity < 1 || input.passengers.length !== input.quantity) {
@@ -518,15 +518,8 @@ export async function createBookingAction(input: CheckoutInput) {
     return { bookingId, reference };
   }
 
-  console.log("[BOOKING] Iniciando geração do PIX");
-
   const pix = await ensureAsaasPixPayment(bookingId, paymentId, {
     responsibleEmail: input.responsibleEmail,
-  });
-
-  console.log("[BOOKING] Geração do PIX retornou:", {
-    ok: pix.ok,
-    hasMessage: Boolean(pix.message),
   });
 
   revalidatePath("/minhas-viagens");
@@ -583,6 +576,9 @@ export async function previewBookingPriceAction(input: {
   const trip = store.trips.find((t) => t.id === input.tripId);
   if (!trip || trip.status !== "PUBLICADA" || trip.deletedAt) {
     return { error: "Viagem indisponível." };
+  }
+  if (isPastTrip(trip.date)) {
+    return { error: "Data da viagem inválida." };
   }
 
   const pricing = computeBookingPrice({
@@ -686,17 +682,34 @@ export async function deleteBookingAction(bookingId: string) {
   return { ok: true };
 }
 
+/**
+ * Uma viagem é vendável apenas se publicada, não excluída e com data futura.
+ * Viagens com data passada não são oferecidas no catálogo público nem permitem
+ * iniciar novas reservas (preview e criação).
+ */
+function isPastTrip(date: string): boolean {
+  return date < new Date().toISOString().slice(0, 10);
+}
+
+function isVendableTrip(trip: {
+  status: string;
+  deletedAt?: string | null;
+  date: string;
+}): boolean {
+  return trip.status === "PUBLICADA" && !trip.deletedAt && !isPastTrip(trip.date);
+}
+
 export async function getPublicTrips() {
   const store = await getRepositoryRuntime().read();
   return store.trips
-    .filter((t) => t.status === "PUBLICADA" && !t.deletedAt)
+    .filter((t) => isVendableTrip(t))
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
 export async function getTripBySlug(slug: string) {
   const store = await getRepositoryRuntime().read();
   const trip = store.trips.find((t) => t.slug === slug);
-  if (!trip || trip.status !== "PUBLICADA" || trip.deletedAt) return null;
+  if (!trip || !isVendableTrip(trip)) return null;
   const boarding = store.tripBoardingPoints
     .filter((t) => t.tripId === trip.id)
     .map((t) => ({

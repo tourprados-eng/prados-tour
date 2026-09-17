@@ -66,3 +66,16 @@ export function calculateTripPrice(
   const couple = priceCouple ?? pricePerson * 2;
   return Math.floor(quantity / 2) * couple + (quantity % 2) * pricePerson;
 }
+
+/**
+ * Aceita apenas caminhos internos seguros para redirecionamento pós-login.
+ * Rejeita URLs absolutas, protocolos e "//" para evitar open redirect.
+ */
+export function safeInternalRedirectPath(value: unknown): string | null {
+  if (typeof value !== "string") return null;
+  const path = value.trim();
+  if (!path.startsWith("/")) return null;
+  if (path.startsWith("//")) return null;
+  if (/[\r\n\u0000]/.test(path)) return null;
+  return path;
+}
