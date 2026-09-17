@@ -1022,7 +1022,9 @@ export async function deleteTripAction(
       // Exclusão definitiva apenas quando não há histórico vinculado. Nesse
       // caso removemos a viagem e seus registros dependentes no store; no
       // Supabase as tabelas filhas (trip_images, trip_boarding_points, seats,
-      // coupon_trips, promotion_trips) usam ON DELETE CASCADE.
+      // coupon_trips, promotion_trips) usam ON DELETE CASCADE e as
+      // payment_claims (FK NO ACTION, fora do store) são removidas pelo
+      // repositório antes da viagem.
       if (!hasBookings && !hasExpenses && !hasReviews) {
         store.trips = store.trips.filter((t) => t.id !== trip.id);
         store.tripBoardingPoints = store.tripBoardingPoints.filter(

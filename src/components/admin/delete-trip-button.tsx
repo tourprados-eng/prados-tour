@@ -105,7 +105,7 @@ export default function DeleteTripButton({ tripId, tripName, hasHistory }: Delet
                 </p>
                 <p className="mt-1 text-sm text-emerald-700/70">
                   {definitive
-                    ? "Fotos, pontos de embarque e assentos também foram removidos."
+                    ? "Fotos, pontos de embarque, assentos e cobranças PIX pendentes também foram removidos."
                     : "O histórico (reservas, pagamentos, comissões) foi preservado."}
                 </p>
               </div>
@@ -159,8 +159,9 @@ export default function DeleteTripButton({ tripId, tripName, hasHistory }: Delet
                       <p className="mt-3 rounded-xl bg-red-50 px-3 py-2 text-xs text-red-700">
                         Nenhuma reserva vinculada: a viagem será excluída{" "}
                         <strong>definitivamente</strong>, incluindo fotos,
-                        pontos de embarque, assentos e links em cupons/promoções.
-                        Esta ação não pode ser desfeita.
+                        pontos de embarque, assentos, cobranças PIX pendentes e
+                        links em cupons/promoções. Esta ação não pode ser
+                        desfeita.
                       </p>
                     )}
                   </div>

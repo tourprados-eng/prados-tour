@@ -368,6 +368,27 @@ export function createSupabaseStoreRepository(): StoreRepository {
     }
   }
 
+  /**
+   * Remove as payment_claims que apontam para as viagens que estão sendo
+   * excluídas. `payment_claims.trip_id` tem FK NO ACTION para `trips` e a
+   * tabela não é uma coleção do store (não entra no diff), então as claims
+   * precisam ser apagadas explicitamente antes de remover a própria viagem —
+   * caso contrário o Postgres rejeita o DELETE com payment_claims_trip_id_fkey.
+   */
+  async function deletePaymentClaimsForTrips(tripIds: string[]): Promise<void> {
+    for (let i = 0; i < tripIds.length; i += BATCH_SIZE) {
+      const batch = tripIds.slice(i, i + BATCH_SIZE);
+      const { error } = await withRetry(() =>
+        supabase
+          .from("payment_claims")
+          .delete()
+          .in("trip_id", batch)
+          .then((r) => r),
+      );
+      if (error) throw new Error(`Falha ao remover payment_claims: ${error.message}`);
+    }
+  }
+
   /** Sincroniza trip_images a partir de trip.images (upsert determinístico). */
   async function syncTripImages(tripRows: Row[]): Promise<void> {
     const tripIds = tripRows.map((row) => row.id as string);
@@ -619,10 +640,16 @@ export function createSupabaseStoreRepository(): StoreRepository {
         }
       }
 
-      // DELETEs em ordem filhos->pais.
+      // DELETEs em ordem filhos->pais. Antes de apagar as viagens removemos as
+      // payment_claims vinculadas (FK NO ACTION, fora do diff do store).
       for (const key of DELETE_ORDER) {
         const op = deletes.find((d) => d.collectionKey === key);
-        if (op) await deleteRowsById(key, op.ids);
+        if (op) {
+          if (key === "trips") {
+            await deletePaymentClaimsForTrips(op.ids);
+          }
+          await deleteRowsById(key, op.ids);
+        }
       }
 
       // UPSERTs em ordem pais->filhos.
