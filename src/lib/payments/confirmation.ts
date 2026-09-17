@@ -160,8 +160,10 @@ export async function processAsaasPaymentEvent(
   try {
     const internalPayment = await findAsaasInternalPayment(chargeId);
     if (!internalPayment || internalPayment.gateway !== "asaas") {
-      await releaseAsaasWebhookEvent(eventId);
-      throw new Error(`Webhook PAYMENT para cobrança desconhecida: ${chargeId}`);
+      // Cobranças antigas que já não existem no banco não podem ser
+      // confirmadas. Consome o evento para não bloquear a fila do Asaas.
+      await completeAsaasWebhookEvent(eventId);
+      return { status: "ignored", reason: "payment_not_found" };
     }
 
     if (eventName === "PAYMENT_CONFIRMED") {
