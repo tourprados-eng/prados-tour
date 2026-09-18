@@ -190,7 +190,9 @@ export async function registerAction(formData: FormData): Promise<{ error: strin
         password: data.password,
       });
     } catch (e) {
-      return { error: e instanceof Error ? e.message : "Erro ao cadastrar." };
+      const message = e instanceof Error ? e.message : "Erro ao cadastrar.";
+      console.error("[registerAction] falha no cadastro supabase:", message);
+      return { error: message };
     }
     redirect(next ? `/confirmar-email?next=${encodeURIComponent(next)}` : "/confirmar-email");
   }

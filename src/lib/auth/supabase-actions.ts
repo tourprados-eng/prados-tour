@@ -92,17 +92,44 @@ export type RegisterInput = {
  * rejeitados.
  */
 export async function registerWithSupabase(data: RegisterInput) {
+  console.info("[registerWithSupabase] início do cadastro.");
+
+  const env = getSupabaseEnvironment();
+  console.info("[registerWithSupabase] configuração do Supabase disponível:", {
+    hasBrowserCredentials: env.hasBrowserCredentials,
+    hasServerCredentials: env.hasServerCredentials,
+    hasUrl: Boolean(env.url),
+    hasAnonKey: Boolean(env.anonKey),
+    hasServiceRoleKey: Boolean(env.serviceRoleKey),
+  });
   const { url, serviceRoleKey } = assertSupabaseServerConfiguration();
   const admin = createClient(url, serviceRoleKey, {
     auth: { autoRefreshToken: false, persistSession: false },
   });
 
-  const { data: duplicate } = await admin
+  const { data: duplicate, error: duplicateError } = await admin
     .from("profiles")
     .select("id")
     .or(`cpf.eq.${data.cpf},email.eq.${data.email}`)
     .limit(1)
     .maybeSingle();
+  if (duplicateError) {
+    console.error(
+      "[registerWithSupabase] erro ao verificar CPF/e-mail duplicado:",
+      {
+        code: duplicateError.code,
+        message: duplicateError.message,
+        details: duplicateError.details,
+      },
+    );
+  }
+  console.info(
+    "[registerWithSupabase] resultado da verificação de CPF/e-mail duplicado:",
+    {
+      foundDuplicate: Boolean(duplicate),
+      hasError: Boolean(duplicateError),
+    },
+  );
   if (duplicate) throw new Error("CPF ou e-mail já cadastrado.");
 
   const siteUrl = getPublicSiteUrl();
@@ -123,13 +150,33 @@ export async function registerWithSupabase(data: RegisterInput) {
     },
   });
 
+  const userCreatedOnSignUp = Boolean(responseData?.user?.id);
+
   if (error) {
+    console.error(
+      "[registerWithSupabase] supabase.auth.signUp retornou erro:",
+      {
+        code: error.code,
+        status: error.status,
+        message: error.message,
+        userCreated: userCreatedOnSignUp,
+      },
+    );
     if (error.message.toLowerCase().includes("already registered")) {
       throw new Error("E-mail já cadastrado.");
     }
     throw new Error("Erro ao cadastrar. Tente novamente.");
   }
   const created = responseData?.user;
+  console.info("[registerWithSupabase] resultado do supabase.auth.signUp:", {
+    hasUser: Boolean(created?.id),
+    isConfirmedImmediately: Boolean(
+      created?.id && (created.identities?.length ?? 0) > 0,
+    ),
+    awaitsEmailConfirmation: Boolean(
+      created?.id && (created.identities?.length ?? 0) === 0,
+    ),
+  });
   if (!created?.id) throw new Error("Erro ao cadastrar. Tente novamente.");
 
   const id = created.id;
@@ -139,24 +186,52 @@ export async function registerWithSupabase(data: RegisterInput) {
     referralCode =
       data.fullName.split(" ")[0].toUpperCase().slice(0, 8) +
       Math.floor(Math.random() * 90 + 10);
-    await admin
+    const { error: referralError } = await admin
       .from("profiles")
       .update({ referral_code: referralCode, updated_at: now })
       .eq("id", id);
-  } catch {
+    if (referralError) {
+      console.error(
+        "[registerWithSupabase] falha ao atualizar referral_code do profile:",
+        {
+          code: referralError.code,
+          message: referralError.message,
+          details: referralError.details,
+        },
+      );
+      referralCode = "";
+    }
+  } catch (e) {
     referralCode = "";
+    console.error(
+      "[registerWithSupabase] exceção ao atualizar referral_code do profile:",
+      e instanceof Error ? e.message : String(e),
+    );
   }
 
-  await admin.from("notifications").insert({
-    id: uuid(),
-    user_id: id,
-    title: "Bem-vindo à Prado's Tour",
-    message: "Sua conta foi criada com sucesso. Explore as próximas excursões!",
-    type: "CADASTRO",
-    read: false,
-    created_at: now,
-  });
-  await admin.from("audit_logs").insert({
+  const { error: notificationInsertError } = await admin
+    .from("notifications")
+    .insert({
+      id: uuid(),
+      user_id: id,
+      title: "Bem-vindo à Prado's Tour",
+      message: "Sua conta foi criada com sucesso. Explore as próximas excursões!",
+      type: "CADASTRO",
+      read: false,
+      created_at: now,
+    });
+  if (notificationInsertError) {
+    console.error(
+      "[registerWithSupabase] falha ao inserir notification:",
+      {
+        code: notificationInsertError.code,
+        message: notificationInsertError.message,
+        details: notificationInsertError.details,
+      },
+    );
+  }
+
+  const { error: auditLogInsertError } = await admin.from("audit_logs").insert({
     id: uuid(),
     user_id: id,
     action: "REGISTER",
@@ -167,6 +242,16 @@ export async function registerWithSupabase(data: RegisterInput) {
     ip: null,
     created_at: now,
   });
+  if (auditLogInsertError) {
+    console.error(
+      "[registerWithSupabase] falha ao inserir audit_log:",
+      {
+        code: auditLogInsertError.code,
+        message: auditLogInsertError.message,
+        details: auditLogInsertError.details,
+      },
+    );
+  }
 
   return created;
 }
