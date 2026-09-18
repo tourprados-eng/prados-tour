@@ -1,5 +1,4 @@
 import type { Metadata, Viewport } from "next";
-import Script from "next/script";
 import { Outfit } from "next/font/google";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import "./globals.css";
@@ -38,26 +37,6 @@ export default function RootLayout({
     <html lang="pt-BR">
       <body className={`${outfit.variable} antialiased`}>
         {children}
-
-        <Script
-          src="https://cdn.onesignal.com/sdks/web/v16/OneSignalSDK.page.js"
-          strategy="afterInteractive"
-        />
-
-        <Script id="onesignal-init" strategy="afterInteractive">
-          {`
-            window.OneSignalDeferred = window.OneSignalDeferred || [];
-            OneSignalDeferred.push(async function(OneSignal) {
-              try {
-                await OneSignal.init({
-                  appId: "03bda2ea-ad11-4b11-884d-2cf4ddc9bcb7",
-                });
-              } catch (error) {
-                console.warn("[OneSignal] init falhou (não-fatal):", error);
-              }
-            });
-          `}
-        </Script>
       </body>
     </html>
   );
