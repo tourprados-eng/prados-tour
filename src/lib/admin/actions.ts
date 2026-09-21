@@ -1186,19 +1186,17 @@ export async function deleteClientAction(
       };
     }
 
-    // Bloqueia o acesso da conta de autenticação, quando aplicável.
+    // Remove a conta de autenticação quando aplicável, evitando um usuário
+    // órfão que impediria o re-cadastro com o mesmo e-mail/CPF. O perfil
+    // anonimizado é preservado: `profiles` não tem FK para `auth.users` e o
+    // histórico financeiro referencia o id.
     if (getAuthDriver() === "supabase") {
       try {
         const { url, serviceRoleKey } = assertSupabaseServerConfiguration();
         const admin = createClient(url, serviceRoleKey, {
           auth: { autoRefreshToken: false, persistSession: false },
         });
-        await admin.auth.admin.updateUserById(clientId, {
-          email: `removido-${clientId}@deleted.local`,
-          password: uuid(),
-          email_confirm: true,
-          ban_duration: "876000h",
-        });
+        await admin.auth.admin.deleteUser(clientId);
       } catch {
         // Best-effort: a anonimização do perfil já foi persistida.
       }

@@ -109,7 +109,7 @@ export async function registerWithSupabase(data: RegisterInput) {
 
   const { data: duplicate, error: duplicateError } = await admin
     .from("profiles")
-    .select("id")
+    .select("id, cpf, email")
     .or(`cpf.eq.${data.cpf},email.eq.${data.email}`)
     .limit(1)
     .maybeSingle();
@@ -130,7 +130,12 @@ export async function registerWithSupabase(data: RegisterInput) {
       hasError: Boolean(duplicateError),
     },
   );
-  if (duplicate) throw new Error("CPF ou e-mail já cadastrado.");
+  if (duplicate) {
+    if (duplicate.cpf === data.cpf) {
+      throw new Error("CPF já cadastrado.");
+    }
+    throw new Error("E-mail já cadastrado.");
+  }
 
   const siteUrl = getPublicSiteUrl();
   const supabase = await createServerSupabaseClient();
