@@ -39,6 +39,12 @@ function normalizeStore(store: DataStore): DataStore {
     booking.insuranceAmount ??= 0;
   }
 
+  // Normaliza avaliações: registro antigo sem visibilidade assume o valor que
+  // reproduz o comportamento anterior (aprovada = visível na Home).
+  for (const review of store.reviews ?? []) {
+    review.showOnHome ??= review.status === "APROVADO";
+  }
+
   store.promoBanner ??= {
     title: "Ofertas e promoções",
     subtitle: "Condições especiais por tempo limitado",

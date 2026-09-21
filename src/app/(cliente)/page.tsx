@@ -1,5 +1,5 @@
 import Image from "next/image";
-import { ShieldCheck, Bus, Ticket, HeartHandshake, Star, Check } from "lucide-react";
+import { ShieldCheck, Bus, Ticket, HeartHandshake, Check } from "lucide-react";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import { getSession } from "@/lib/auth/session";
 import { buildWhatsAppUrl } from "@/lib/contact";
@@ -8,6 +8,8 @@ import { ClientGalleryCarousel } from "@/components/gallery/client-gallery-carou
 import { TripCard } from "@/components/trips/trip-card";
 import { OffersGrid } from "@/components/promotions/offers-grid";
 import { HomeHero } from "@/components/home/hero";
+import { PublicReviewForm } from "@/components/reviews/public-review-form";
+import { ReviewsCarousel } from "@/components/reviews/reviews-carousel";
 import { DEMO_PASSWORD_HINT } from "@/lib/constants";
 
 const benefits = [
@@ -45,24 +47,6 @@ const benefits = [
   },
 ];
 
-const testimonials = [
-  {
-    name: "Camila R.",
-    trip: "Ilhabela",
-    text: "Organização impecável do embarque ao retorno. Já quero a próxima saída.",
-  },
-  {
-    name: "Bruno S.",
-    trip: "Guarujá",
-    text: "Reservei pelo site em minutos e o voucher no celular facilitou tudo.",
-  },
-  {
-    name: "Larissa M.",
-    trip: "Paraty",
-    text: "Atendimento atencioso e viagem bem cuidada. Recomendo de verdade.",
-  },
-];
-
 export default async function HomePage() {
   const [session, store] = await Promise.all([getSession(), getRepositoryRuntime().read()]);
   const trips = store.trips.filter((t) => t.status === "PUBLICADA" && !t.deletedAt);
@@ -92,6 +76,36 @@ export default async function HomePage() {
         caption: photo.caption,
       };
     });
+
+  // Avaliações aprovadas E com visibilidade na Home habilitada — mais
+  // recentes primeiro. Comentários vazios não são exibidos no carrossel.
+  const approvedReviews = [...store.reviews]
+    .filter(
+      (review) =>
+        review.status === "APROVADO" &&
+        review.showOnHome &&
+        (review.comment ?? "").trim().length > 0,
+    )
+    .sort((a, b) => b.createdAt.localeCompare(a.createdAt))
+    .slice(0, 9)
+    .map((review) => {
+      const trip = store.trips.find((item) => item.id === review.tripId);
+      const reviewer = review.customerId
+        ? store.profiles.find((profile) => profile.id === review.customerId)
+        : null;
+      return {
+        id: `review-${review.id}`,
+        name: review.authorName ?? reviewer?.fullName ?? "Cliente",
+        trip: trip?.name ?? "",
+        rating: review.rating,
+        text: review.comment,
+      };
+    });
+
+  const reviewTrips = trips
+    .slice()
+    .sort((a, b) => b.date.localeCompare(a.date))
+    .map(({ id, name }) => ({ id, name }));
 
   return (
     <div>
@@ -315,36 +329,26 @@ export default async function HomePage() {
       {/* Depoimentos */}
       <section className="bg-brand-ink section-pad text-white">
         <div className="container-page">
-          <div className="max-w-xl">
-            <p className="text-xs font-bold uppercase tracking-[0.12em] text-brand-secondary">
-              Avaliações
-            </p>
-            <h2 className="mt-2 font-display text-3xl font-bold tracking-tight md:text-4xl">
-              Quem viaja, recomenda
-            </h2>
+          <div className="flex flex-col gap-6 lg:flex-row lg:items-end lg:justify-between">
+            <div className="max-w-xl">
+              <p className="text-xs font-bold uppercase tracking-[0.12em] text-brand-secondary">
+                Avaliações
+              </p>
+              <h2 className="mt-2 font-display text-3xl font-bold tracking-tight md:text-4xl">
+                Quem viaja, recomenda
+              </h2>
+            </div>
+            <PublicReviewForm trips={reviewTrips} />
           </div>
 
-          <div className="mt-10 grid gap-5 md:grid-cols-3">
-            {testimonials.map((item) => (
-              <figure
-                key={item.name}
-                className="border-t-2 border-brand-primary bg-white/5 p-6 backdrop-blur-sm transition duration-300 hover:bg-white/10"
-              >
-                <div className="flex gap-1 text-brand-secondary" aria-label="5 estrelas">
-                  {Array.from({ length: 5 }).map((_, i) => (
-                    <Star key={i} className="h-4 w-4 fill-current" />
-                  ))}
-                </div>
-                <blockquote className="mt-4 text-sm leading-relaxed text-white/85">
-                  “{item.text}”
-                </blockquote>
-                <figcaption className="mt-5 text-sm">
-                  <span className="font-semibold text-white">{item.name}</span>
-                  <span className="text-white/50"> · {item.trip}</span>
-                </figcaption>
-              </figure>
-            ))}
-          </div>
+          {approvedReviews.length === 0 ? (
+            <div className="mt-10 rounded-2xl border border-white/10 bg-white/5 p-8 text-center text-sm leading-relaxed text-white/60 backdrop-blur-sm">
+              Ainda não há avaliações publicadas. Seja o primeiro a compartilhar
+              sua experiência com a {brand.companyName}.
+            </div>
+          ) : (
+            <ReviewsCarousel reviews={approvedReviews} />
+          )}
         </div>
       </section>
 

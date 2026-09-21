@@ -298,11 +298,14 @@ export interface Notification {
 
 export interface Review {
   id: string;
-  customerId: string;
+  customerId: string | null;
+  authorName: string | null;
   tripId: string;
   rating: number;
   comment: string;
   status: ReviewStatus;
+  /** Visibilidade independente da aprovação: só aparece na Home se true (e APROVADO). */
+  showOnHome: boolean;
   reviewedBy: string | null;
   reviewedAt: string | null;
   createdAt: string;

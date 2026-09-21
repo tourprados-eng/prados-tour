@@ -21,6 +21,7 @@ const eslintConfig = [
       ".backup-*/**",
       ".data/**",
       "public/uploads/**",
+      "prados-tour-avaliacao*/**",
     ],
   },
 ];

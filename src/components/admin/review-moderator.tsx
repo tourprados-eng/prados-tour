@@ -5,14 +5,17 @@ import { useRouter } from "next/navigation";
 import {
   deleteReviewAction,
   moderateReviewAction,
+  setReviewHomeVisibilityAction,
 } from "@/lib/reviews/actions";
 
 export function ReviewModerator({
   reviewId,
   status,
+  showOnHome,
 }: {
   reviewId: string;
   status: string;
+  showOnHome: boolean;
 }) {
   const router = useRouter();
   const [pending, startTransition] = useTransition();
@@ -47,6 +50,23 @@ export function ReviewModerator({
           className="rounded-full bg-amber-500 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-amber-600 disabled:opacity-50"
         >
           Rejeitar
+        </button>
+      )}
+      {status === "APROVADO" && (
+        <button
+          disabled={pending}
+          onClick={() =>
+            run(() =>
+              setReviewHomeVisibilityAction(reviewId, !showOnHome),
+            )
+          }
+          className={
+            showOnHome
+              ? "rounded-full bg-black/70 px-3 py-1.5 text-xs font-semibold text-white transition hover:bg-black disabled:opacity-50"
+              : "rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-[#2F2328] ring-1 ring-black/15 transition hover:bg-black/5 disabled:opacity-50"
+          }
+        >
+          {showOnHome ? "Ocultar da Home" : "Exibir na Home"}
         </button>
       )}
       <button

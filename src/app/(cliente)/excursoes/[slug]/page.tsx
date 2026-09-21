@@ -221,9 +221,9 @@ export default async function TripDetailPage({
             </h2>
             <ul className="mt-5 space-y-4">
               {approvedReviews.map((r) => {
-                const reviewer = store.profiles.find(
-                  (p) => p.id === r.customerId,
-                );
+                const reviewer = r.customerId
+                  ? store.profiles.find((p) => p.id === r.customerId)
+                  : null;
                 return (
                   <li
                     key={r.id}
@@ -231,7 +231,7 @@ export default async function TripDetailPage({
                   >
                     <div className="flex flex-wrap items-center gap-2">
                       <p className="font-semibold text-brand-ink">
-                        {reviewer?.fullName ?? "Cliente"}
+                        {r.authorName ?? reviewer?.fullName ?? "Cliente"}
                       </p>
                       <span className="text-amber-500">
                         {"★".repeat(r.rating)}
