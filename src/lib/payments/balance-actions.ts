@@ -1,6 +1,5 @@
 "use server";
 
-import { revalidatePath } from "next/cache";
 import { getSession } from "@/lib/auth/session";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import { canAccessRole } from "@/lib/roles";
@@ -87,11 +86,6 @@ export async function payBalanceAction(
   if (!result.ok) {
     return { ok: false, error: result.message ?? "Não foi possível gerar o PIX do saldo." };
   }
-
-  revalidatePath("/minhas-viagens");
-  revalidatePath("/meus-pagamentos");
-  revalidatePath("/admin/reservas");
-  revalidatePath(`/admin/reservas/${bookingId}`);
 
   return {
     ok: true,
