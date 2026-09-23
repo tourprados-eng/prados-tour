@@ -2,7 +2,9 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { getSession, canAccess } from "@/lib/auth/session";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
+import { getBalanceInfo } from "@/lib/payments/balance";
 import { formatCurrency, formatDate, formatTripDepartureDate } from "@/lib/utils";
+import { BalancePaymentButton } from "@/components/payments/balance-payment-button";
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return "Não informado";
@@ -64,6 +66,10 @@ export default async function AdminReservaDetalhesPage({
   const payment = store.payments.find(
     (item) => item.bookingId === booking.id,
   );
+
+  const balanceInfo = getBalanceInfo(store, booking, trip);
+  const showBalanceAction =
+    balanceInfo.status === "PENDENTE" || balanceInfo.status === "VENCIDO";
 
   const installments = store.installments.filter(
     (item) => item.bookingId === booking.id,
@@ -223,6 +229,90 @@ export default async function AdminReservaDetalhesPage({
                   {payment.plan === "PARCIAL" ? "Parcial" : "Total"}
                 </p>
               )}
+            </div>
+
+            <div className="mt-4 rounded-2xl bg-white p-4 ring-1 ring-black/5">
+              <p className="text-xs font-semibold uppercase tracking-wide text-black/40">
+                Saldo restante
+              </p>
+
+              <div className="mt-2 space-y-1 text-sm">
+                <div className="flex justify-between gap-4">
+                  <span className="text-black/50">Total</span>
+                  <strong>{formatCurrency(balanceInfo.total)}</strong>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-black/50">Já pago</span>
+                  <strong className="text-emerald-600">
+                    {formatCurrency(balanceInfo.paid)}
+                  </strong>
+                </div>
+                <div className="flex justify-between gap-4">
+                  <span className="text-black/50">Saldo</span>
+                  <strong className="text-[var(--brand-primary)]">
+                    {formatCurrency(balanceInfo.balance)}
+                  </strong>
+                </div>
+              </div>
+
+              {balanceInfo.dueDate && (
+                <p className="mt-2 text-xs text-black/50">
+                  Prazo: {balanceInfo.dueDate}
+                  {balanceInfo.isDueDatePassed && balanceInfo.status !== "COMPLETO" ? (
+                    <span className="ml-1 font-semibold text-red-600">
+                      (vencido)
+                    </span>
+                  ) : (
+                    <span className="ml-1 font-semibold text-emerald-600">
+                      em dia
+                    </span>
+                  )}
+                </p>
+              )}
+
+              <p className="mt-2 text-xs">
+                Status do saldo:{" "}
+                <strong
+                  className={
+                    balanceInfo.status === "COMPLETO"
+                      ? "text-emerald-600"
+                      : balanceInfo.status === "VENCIDO"
+                        ? "text-red-600"
+                        : "text-black/70"
+                  }
+                >
+                  {balanceInfo.status === "COMPLETO"
+                    ? "Pagamento completo"
+                    : balanceInfo.status === "VENCIDO"
+                      ? "Saldo vencido"
+                      : balanceInfo.status === "VIAGEM_REALIZADA"
+                        ? "Viagem realizada"
+                        : "Saldo pendente"}
+                </strong>
+              </p>
+
+              {balanceInfo.balancePayment && (
+                <p className="mt-2 text-xs text-black/50">
+                  Cobrança de saldo:{" "}
+                  {balanceInfo.balancePayment.gatewayPaymentId || "sem id Asaas"}{" "}
+                  · {balanceInfo.balancePayment.status} ·{" "}
+                  {formatCurrency(balanceInfo.balancePayment.amount)}
+                </p>
+              )}
+
+              {showBalanceAction ? (
+                <div className="mt-3">
+                  <BalancePaymentButton
+                    bookingId={booking.id}
+                    label={
+                      balanceInfo.balancePayment?.gatewayPaymentId
+                        ? "Reutilizar / consultar PIX do saldo"
+                        : "Gerar cobrança do saldo"
+                    }
+                    compact
+                  />
+                </div>
+              ) : null}
             </div>
           </div>
         </section>

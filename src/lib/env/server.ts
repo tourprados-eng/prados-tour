@@ -2,6 +2,7 @@
  * Variáveis exclusivas do servidor.
  * Nunca importe este módulo em componentes com "use client".
  */
+
 export function isProductionEnvironment() {
   return process.env.NODE_ENV === "production";
 }
@@ -30,9 +31,11 @@ export function getSuperAdminEmail(): string | null {
 
 /**
  * Chave de API do Asaas. Exclusiva do servidor; nunca expor ao cliente.
+ * Em desenvolvimento local pode haver fallback para o valor literal de
+ * `.env.local` — ver `@/lib/payments/asaas-secrets`.
  */
-export function getAsaasApiKey() {
-  return getRequiredServerEnv("ASAAS_API_KEY");
+export function getAsaasApiKeyEnvOnly() {
+  return process.env.ASAAS_API_KEY?.trim();
 }
 
 /**

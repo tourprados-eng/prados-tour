@@ -1,6 +1,7 @@
 import "server-only";
 
-import { getAsaasApiKey, getAsaasBaseUrl } from "@/lib/env/server";
+import { getAsaasBaseUrl } from "@/lib/env/server";
+import { getAsaasApiKey } from "@/lib/payments/asaas-secrets";
 
 const ASAAS_USER_AGENT = "PradosTour/1.0";
 const ASAAS_REQUEST_TIMEOUT_MS = 15_000;
@@ -211,7 +212,7 @@ async function asaasRequest<T>({ method, path, body }: AsaasRequestOptions): Pro
   let apiKey: string;
   try {
     url = `${getAsaasBaseUrl()}${path}`;
-    apiKey = getAsaasApiKey();
+    apiKey = await getAsaasApiKey();
   } catch (error) {
     const varName = asaasConfigVarName(error);
     console.error(

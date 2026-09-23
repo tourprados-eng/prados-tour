@@ -41,9 +41,14 @@ const ASAAS_RECEIVED_STATUSES = new Set(["CONFIRMED", "RECEIVED"]);
 const MONEY_TOLERANCE = 0.01;
 
 /**
- * Confirmação real do pagamento (efeitos: Payment PAGO + paidAt, parcela 1
- * PAGO, Booking CONFIRMADA, pontos, notificação e liberação do voucher).
- * Idempotente: se o Payment já está PAGO, não produz efeito algum.
+ * Confirmação real do pagamento (efeitos: Payment PAGO + paidAt, parcela
+ * correspondente PAGO, Booking CONFIRMADA, pontos, notificação e liberação do
+ * voucher). Idempotente: se o Payment já está PAGO, não produz efeito algum.
+ *
+ * Para pagamentos de SALDO (metadata.type === "BALANCE") marca a PARCELA 2.
+ * Fallback (reservas antigas sem parcela 2 cadastrada): marca a primeira
+ * parcela PENDENTE da reserva — assim uma reserva histórica que só tinha a
+ * parcela 1 paga passa a ter a parcela 2 como PAGO.
  */
 export async function confirmPaymentWebhook(gatewayPaymentId: string) {
   await getRepositoryRuntime().transaction((store) => {
@@ -52,9 +57,19 @@ export async function confirmPaymentWebhook(gatewayPaymentId: string) {
     const now = new Date().toISOString();
     payment.status = "PAGO";
     payment.paidAt = now;
-    const installment = store.installments.find(
-      (i) => i.bookingId === payment.bookingId && i.number === 1,
-    );
+
+    const isBalancePayment =
+      (payment.metadata as Record<string, unknown> | null | undefined)?.type === "BALANCE";
+    const targetNumber = isBalancePayment ? 2 : 1;
+
+    const installment =
+      store.installments.find(
+        (i) => i.bookingId === payment.bookingId && i.number === targetNumber,
+      ) ??
+      store.installments
+        .filter((i) => i.bookingId === payment.bookingId && i.status !== "PAGO")
+        .sort((a, b) => a.number - b.number)[0];
+
     if (installment) {
       installment.status = "PAGO";
       installment.paidAt = now;
@@ -75,20 +90,22 @@ export async function confirmPaymentWebhook(gatewayPaymentId: string) {
       store.notifications.push({
         id: uuid(),
         userId: booking.customerId,
-        title: "Pagamento confirmado",
-        message: `Pagamento da reserva ${booking.reference} confirmado. Seu voucher já está disponível.`,
-        type: "PAGAMENTO",
+        title: isBalancePayment ? "Saldo confirmado" : "Pagamento confirmado",
+        message: isBalancePayment
+          ? `Seu pagamento do saldo restante da reserva ${booking.reference} foi confirmado. Reserva totalmente quitada.`
+          : `Pagamento da reserva ${booking.reference} confirmado. Seu voucher já está disponível.`,
+        type: isBalancePayment ? "SALDO" : "PAGAMENTO",
         read: false,
         createdAt: now,
       });
       store.auditLogs.push({
         id: uuid(),
         userId: null,
-        action: "PAYMENT_CONFIRMED",
+        action: isBalancePayment ? "BALANCE_PAYMENT_CONFIRMED" : "PAYMENT_CONFIRMED",
         entity: "booking",
         entityId: booking.id,
-        oldValue: { method: payment.method },
-        newValue: { status: "PAGO", reference: booking.reference },
+        oldValue: { method: payment.method, installment: targetNumber },
+        newValue: { status: "PAGO", reference: booking.reference, installment: targetNumber },
         ip: null,
         createdAt: now,
       });

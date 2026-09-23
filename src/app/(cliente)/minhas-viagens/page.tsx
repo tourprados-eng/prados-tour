@@ -3,10 +3,12 @@ import { BusFront, Luggage, MapPin, Shell, ShieldCheck, Sparkles, Users } from "
 import { requireUser } from "@/lib/auth/actions";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import { formatCurrency, formatTripDepartureDate } from "@/lib/utils";
+import { getBalanceInfo } from "@/lib/payments/balance";
 import { PhotoShareCard } from "@/components/gallery/photo-share-card";
 import { HomeHero } from "@/components/home/hero";
 import { Button } from "@/components/ui/button";
-import type { Booking, Trip } from "@/types";
+import { BalancePaymentButton } from "@/components/payments/balance-payment-button";
+import type { Booking, DataStore, Trip } from "@/types";
 
 const emptyBenefits = [
   { icon: MapPin, label: "Destinos incríveis" },
@@ -15,7 +17,74 @@ const emptyBenefits = [
   { icon: Sparkles, label: "Colecione boas histórias" },
 ];
 
-function BookingCard({ booking, trip }: { booking: Booking; trip: Trip | undefined }) {
+function BalanceBlock({
+  booking,
+  trip,
+  store,
+}: {
+  booking: Booking;
+  trip: Trip | undefined;
+  store: DataStore;
+}) {
+  if (booking.paymentPlan !== "PARCIAL" || !trip) return null;
+
+  const today = new Date().toISOString().slice(0, 10);
+  const tripDate = trip.departureDate ?? trip.date;
+  const info = getBalanceInfo(store, booking, trip);
+
+  return (
+    <div className="mt-3 rounded-2xl bg-brand-tint/60 p-4 ring-1 ring-brand-line/60">
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-1 text-sm">
+        <div>
+          <p className="font-semibold text-brand-ink">
+            Saldo restante:{" "}
+            <span className="text-[var(--brand-primary)]">
+              {formatCurrency(info.balance)}
+            </span>
+          </p>
+          <p className="mt-0.5 text-xs text-brand-muted">
+            Total {formatCurrency(info.total)} · Já pago {formatCurrency(info.paid)}
+          </p>
+        </div>
+        {info.dueDate && (
+          <p className="text-xs font-semibold">
+            {info.isDueDatePassed ? "Prazo vencido em " : "Prazo: "}
+            {info.dueDate}
+          </p>
+        )}
+      </div>
+
+      {info.status === "COMPLETO" && (
+        <p className="mt-2 text-sm font-semibold text-emerald-600">
+          Pagamento completo. Aproveite a viagem!
+        </p>
+      )}
+
+      {info.status === "VIAGEM_REALIZADA" && (
+        <p className="mt-2 text-sm font-semibold text-brand-muted">
+          Viagem realizada.
+        </p>
+      )}
+
+      {(info.status === "PENDENTE" || info.status === "VENCIDO") &&
+        tripDate >= today && (
+          <div className="mt-3 max-w-md">
+            <BalancePaymentButton bookingId={booking.id} />
+          </div>
+        )}
+    </div>
+  );
+}
+
+function BookingCard({
+  booking,
+  trip,
+  store,
+}: {
+  booking: Booking;
+  trip: Trip | undefined;
+  store: DataStore;
+}) {
   const tripName = trip?.name ?? "Destino indisponível";
   const tripDate = trip ? formatTripDepartureDate(trip) : "—";
   const passengers =
@@ -35,22 +104,25 @@ function BookingCard({ booking, trip }: { booking: Booking; trip: Trip | undefin
           {booking.boardingPoint ? ` · ${booking.boardingPoint}` : ""} ·{" "}
           {formatCurrency(booking.totalAmount)} · {passengers}
         </p>
+        <BalanceBlock booking={booking} trip={trip} store={store} />
       </div>
-      {booking.status === "CONFIRMADA" ? (
-        <Link
-          href={`/voucher/${booking.id}`}
-          className="text-sm font-semibold text-brand-primary hover:underline"
-        >
-          Ver voucher
-        </Link>
-      ) : (
-        <Link
-          href={`/checkout/sucesso?booking=${booking.id}`}
-          className="text-sm font-semibold text-brand-primary hover:underline"
-        >
-          Ver pagamento
-        </Link>
-      )}
+      <div className="flex flex-col items-start gap-3 sm:items-end">
+        {booking.status === "CONFIRMADA" ? (
+          <Link
+            href={`/voucher/${booking.id}`}
+            className="text-sm font-semibold text-brand-primary hover:underline"
+          >
+            Ver voucher
+          </Link>
+        ) : (
+          <Link
+            href={`/checkout/sucesso?booking=${booking.id}`}
+            className="text-sm font-semibold text-brand-primary hover:underline"
+          >
+            Ver pagamento
+          </Link>
+        )}
+      </div>
     </div>
   );
 }
@@ -163,7 +235,7 @@ export default async function MyTripsPage() {
               </h2>
               <div className="mt-4 space-y-4">
                 {upcoming.map(({ booking, trip }) => (
-                  <BookingCard key={booking.id} booking={booking} trip={trip} />
+                  <BookingCard key={booking.id} booking={booking} trip={trip} store={store} />
                 ))}
               </div>
             </section>
@@ -176,7 +248,7 @@ export default async function MyTripsPage() {
               </h2>
               <div className="mt-4 space-y-4">
                 {history.map(({ booking, trip }) => (
-                  <BookingCard key={booking.id} booking={booking} trip={trip} />
+                  <BookingCard key={booking.id} booking={booking} trip={trip} store={store} />
                 ))}
               </div>
             </section>

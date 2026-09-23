@@ -1,8 +1,10 @@
 import Link from "next/link";
 import { getSession, canAccess } from "@/lib/auth/session";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
+import { getBalanceInfo } from "@/lib/payments/balance";
 import { formatCurrency, formatTripDepartureDate } from "@/lib/utils";
 import DeleteBookingButton from "@/components/admin/delete-booking-button";
+import { BalanceRotinaActions } from "@/components/payments/balance-rotina-actions";
 
 type SearchParams = Promise<{
   q?: string;
@@ -84,11 +86,17 @@ export default async function AdminReservasPage({
         ? store.profiles.find((profile) => profile.id === seller.id)
         : null;
 
+      const balance =
+        booking.paymentPlan === "PARCIAL"
+          ? getBalanceInfo(store, booking, trip)
+          : null;
+
       return {
         booking,
         customer,
         trip,
         payment,
+        balance,
         passengers,
         seller,
         sellerProfile,
@@ -161,6 +169,21 @@ export default async function AdminReservasPage({
           <div className="rounded-2xl bg-white px-5 py-3 text-sm ring-1 ring-black/5">
             <span className="text-black/45">Reservas exibidas:</span>{" "}
             <strong>{reservations.length}</strong>
+          </div>
+        </div>
+
+        <div className="rounded-3xl bg-white p-5 ring-1 ring-black/5">
+          <div className="border-b border-black/5 pb-3">
+            <h2 className="font-[family-name:var(--font-display)] text-lg font-bold">
+              Rotinas de saldo
+            </h2>
+            <p className="mt-1 text-sm text-black/50">
+              Lembretes e reconciliação do saldo restante das reservas parciais
+              (somente leitura por padrão; aplicar apenas quando autorizado).
+            </p>
+          </div>
+          <div className="mt-4">
+            <BalanceRotinaActions />
           </div>
         </div>
       </div>
@@ -289,20 +312,21 @@ export default async function AdminReservasPage({
           </div>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full min-w-[1050px] text-left">
-              <thead className="bg-black/[0.025] text-xs uppercase tracking-wide text-black/45">
-                <tr>
-                  <th className="px-6 py-4">Reserva</th>
-                  <th className="px-6 py-4">Cliente</th>
-                  <th className="px-6 py-4">Viagem</th>
-                  <th className="px-6 py-4">Passageiros</th>
-                  <th className="px-6 py-4">Embarque</th>
-                  <th className="px-6 py-4">Valor</th>
-                  <th className="px-6 py-4">Pagamento</th>
-                  <th className="px-6 py-4">Status</th>
-                  <th className="px-6 py-4">Ações</th>
-                </tr>
-              </thead>
+            <table className="w-full min-w-[1200px] text-left">
+<thead className="bg-black/[0.025] text-xs uppercase tracking-wide text-black/45">
+                  <tr>
+                    <th className="px-6 py-4">Reserva</th>
+                    <th className="px-6 py-4">Cliente</th>
+                    <th className="px-6 py-4">Viagem</th>
+                    <th className="px-6 py-4">Passageiros</th>
+                    <th className="px-6 py-4">Embarque</th>
+                    <th className="px-6 py-4">Valor</th>
+                    <th className="px-6 py-4">Pagamento</th>
+                    <th className="px-6 py-4">Saldo</th>
+                    <th className="px-6 py-4">Status</th>
+                    <th className="px-6 py-4">Ações</th>
+                  </tr>
+                </thead>
 
               <tbody className="divide-y divide-black/5">
                 {reservations.map(
@@ -311,6 +335,7 @@ export default async function AdminReservasPage({
                     customer,
                     trip,
                     payment,
+                    balance,
                     passengers,
                   }) => (
                     <tr
@@ -380,6 +405,36 @@ export default async function AdminReservasPage({
                         <p className="mt-1 text-xs text-black/45">
                           {payment?.status || "Sem pagamento"}
                         </p>
+                      </td>
+
+                      <td className="px-6 py-5">
+                        {balance ? (
+                          <>
+                            <p className="text-sm font-bold">
+                              {formatCurrency(balance.balance)}
+                            </p>
+                            {balance.status === "COMPLETO" ? (
+                              <span className="mt-1 inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-bold text-emerald-700 ring-1 ring-emerald-200">
+                                Completo
+                              </span>
+                            ) : (
+                              <span
+                                className={`mt-1 inline-flex rounded-full px-2 py-0.5 text-xs font-bold ring-1 ${
+                                  balance.isDueDatePassed
+                                    ? "bg-red-50 text-red-700 ring-red-200"
+                                    : "bg-amber-50 text-amber-700 ring-amber-200"
+                                }`}
+                              >
+                                {balance.isDueDatePassed
+                                  ? "Vencido"
+                                  : "Em aberto"}
+                                {balance.balancePayment ? " · cobrança" : ""}
+                              </span>
+                            )}
+                          </>
+                        ) : (
+                          <span className="text-xs text-black/35">—</span>
+                        )}
                       </td>
 
                       <td className="px-6 py-5">
