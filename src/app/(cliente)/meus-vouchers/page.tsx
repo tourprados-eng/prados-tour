@@ -1,12 +1,16 @@
 import Link from "next/link";
 import { requireUser } from "@/lib/auth/actions";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
+import { isBookingFullyPaid } from "@/lib/payments/balance";
 
 export default async function MyVouchersPage() {
   const session = await requireUser();
   const store = await getRepositoryRuntime().read();
   const bookings = store.bookings.filter(
-    (b) => b.customerId === session.id && b.status === "CONFIRMADA",
+    (b) =>
+      b.customerId === session.id &&
+      b.status === "CONFIRMADA" &&
+      isBookingFullyPaid(store, b.id),
   );
 
   return (

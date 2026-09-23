@@ -67,6 +67,16 @@ export function BalancePaymentButton({
             </p>
           ) : (
             <>
+              {state.status === "pending" && state.paymentUrl && (
+                <a
+                  href={state.paymentUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="mb-4 block w-full rounded-xl bg-[#ec3f88] px-4 py-3 text-center text-base font-bold text-white shadow-sm transition hover:opacity-90"
+                >
+                  Pagar agora
+                </a>
+              )}
               <p className="text-sm font-semibold text-[var(--brand-primary)]">
                 PIX — saldo restante
               </p>

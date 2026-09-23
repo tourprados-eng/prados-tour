@@ -18,6 +18,7 @@ export type BalançoActionResult =
       reused?: boolean;
       amount: number;
       pixCopyPaste?: string | null;
+      paymentUrl?: string | null;
       bookingId: string;
     }
   | { ok: false; error: string };
@@ -98,6 +99,7 @@ export async function payBalanceAction(
     reused: result.reused,
     amount: result.amount ?? info.balance,
     pixCopyPaste: result.pixCopyPaste ?? null,
+    paymentUrl: result.paymentUrl ?? null,
     bookingId,
   };
 }

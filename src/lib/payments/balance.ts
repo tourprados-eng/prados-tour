@@ -5,8 +5,10 @@ import { v4 as uuid } from "uuid";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import { onlyDigits } from "@/lib/utils";
 import {
+  asaasPaymentLink,
   createAsaasPixPayment,
   findAsaasPaymentByExternalReference,
+  getAsaasPayment,
   getAsaasPixQrCode,
   getOrCreateAsaasCustomer,
 } from "@/lib/payments/asaas";
@@ -78,6 +80,18 @@ export function computeRemainingBalance(
     .filter((p) => p.bookingId === bookingId && p.status === "PAGO")
     .reduce((sum, p) => sum + Number(p.amount ?? 0), 0);
   return Math.round((Number(booking.totalAmount) - paid) * 100) / 100;
+}
+
+/**
+ * Reserva integralmente paga (saldo = 0). Autorização REAL de voucher: baseada
+ * no estado do pagamento (soma de Payments PAGO == total), NÃO no status
+ * CONFIRMADA nem na primeira parcela.
+ */
+export function isBookingFullyPaid(
+  store: DataStore,
+  bookingId: string,
+): boolean {
+  return computeRemainingBalance(store, bookingId) <= MONEY_TOLERANCE;
 }
 
 export type BalanceStatus =
@@ -254,6 +268,7 @@ async function persistBalancePayment(
     chargeId: string;
     payload: string | null;
     expirationDate: string | null;
+    paymentUrl?: string | null;
     amount: number;
     dueDate: string;
     responsibleEmail?: string;
@@ -276,6 +291,7 @@ async function persistBalancePayment(
       awaitingWebhook: true,
       pixState: data.payload ? "QR_READY" : "CHARGE_PENDING_QR",
       pixExpirationDate: data.expirationDate ?? null,
+      paymentUrl: data.paymentUrl ?? null,
       asaasExternalReference: externalReference,
       responsibleEmail: data.responsibleEmail?.trim() || null,
     };
@@ -346,6 +362,7 @@ export async function ensureAsaasBalancePayment(
   message?: string;
   error?: string;
   pixCopyPaste?: string | null;
+  paymentUrl?: string | null;
 }> {
   let completed = false;
   try {
@@ -377,6 +394,12 @@ export async function ensureAsaasBalancePayment(
     const amount = existing?.amount ?? opts.amount;
 
     let chargeId: string | null = existing?.gatewayPaymentId ?? null;
+
+    let paymentUrl: string | null =
+      typeof existing?.metadata?.paymentUrl === "string" &&
+      existing.metadata.paymentUrl.trim()
+        ? existing.metadata.paymentUrl.trim()
+        : null;
 
     if (!chargeId) {
       try {
@@ -425,6 +448,7 @@ export async function ensureAsaasBalancePayment(
 
         if (created) {
           chargeId = created.id;
+          paymentUrl = asaasPaymentLink(created) ?? paymentUrl;
           await updatePixClaim(paymentId, { chargeId, bookingId }).catch(
             () => undefined,
           );
@@ -452,6 +476,20 @@ export async function ensureAsaasBalancePayment(
       };
     }
 
+    if (!paymentUrl) {
+      // Leitura ÚNICA (GET) da cobrança já existente: obtém o link web sem
+      // criar nenhuma cobrança nova. Falhou/inexistente -> mantém QR normal.
+      try {
+        paymentUrl = asaasPaymentLink(await getAsaasPayment(chargeId));
+      } catch (error) {
+        console.error(
+          "[ASAAS] Falha ao obter link de pagamento da cobrança do saldo:",
+          error instanceof Error ? error.message : error,
+        );
+        paymentUrl = null;
+      }
+    }
+
     let payload = existing?.pixCopyPaste ?? null;
     let expirationDate: string | null =
       typeof existing?.metadata?.pixExpirationDate === "string"
@@ -477,6 +515,7 @@ export async function ensureAsaasBalancePayment(
         chargeId,
         payload,
         expirationDate,
+        paymentUrl,
         amount,
         dueDate: opts.dueDate,
         responsibleEmail: opts.responsibleEmail,
@@ -503,15 +542,23 @@ export async function ensureAsaasBalancePayment(
         message:
           "O PIX do saldo foi gerado, mas o QR Code ainda está pendente. Tente abrir a reserva novamente em instantes.",
         pixCopyPaste: payload,
+        paymentUrl,
       };
     }
 
-    return { ok: true, pixCopyPaste: payload };
+    return { ok: true, pixCopyPaste: payload, paymentUrl };
   } finally {
     if (!completed) {
       await releasePixClaim(paymentId).catch(() => undefined);
     }
   }
+}
+
+/** Link web de pagamento da cobrança de saldo salvo no metadata (se houver). */
+function balancePaymentUrl(payment: Payment | undefined): string | null {
+  if (!payment) return null;
+  const link = payment.metadata?.paymentUrl;
+  return typeof link === "string" && link.trim() ? link.trim() : null;
 }
 
 /** Ponto de entrada único da cobrança de saldo usado pela action (com claim). */
@@ -527,6 +574,7 @@ export async function ensureBalanceChargeForBooking(
   error?: string;
   amount?: number;
   pixCopyPaste?: string | null;
+  paymentUrl?: string | null;
 }> {
   if (!trip) {
     return { ok: false, message: "Viagem não encontrada." };
@@ -562,6 +610,7 @@ export async function ensureBalanceChargeForBooking(
         error: ensured.error,
         amount: balance,
         pixCopyPaste: existing.pixCopyPaste,
+        paymentUrl: ensured.paymentUrl,
       };
     }
     return {
@@ -569,6 +618,7 @@ export async function ensureBalanceChargeForBooking(
       reused: true,
       amount: balance,
       pixCopyPaste: existing.pixCopyPaste ?? ensured.pixCopyPaste,
+      paymentUrl: ensured.paymentUrl ?? balancePaymentUrl(existing),
     };
   }
 
@@ -597,6 +647,7 @@ export async function ensureBalanceChargeForBooking(
           error: ensured.error,
           amount: balance,
           pixCopyPaste: ensured.pixCopyPaste,
+          paymentUrl: ensured.paymentUrl,
         };
       }
       const after = await getRepositoryRuntime().read();
@@ -606,6 +657,7 @@ export async function ensureBalanceChargeForBooking(
         reused: true,
         amount: balance,
         pixCopyPaste: row?.pixCopyPaste ?? ensured.pixCopyPaste,
+        paymentUrl: ensured.paymentUrl ?? balancePaymentUrl(row),
       };
     }
     return {
@@ -633,6 +685,7 @@ export async function ensureBalanceChargeForBooking(
       error: ensured.error,
       amount: balance,
       pixCopyPaste: ensured.pixCopyPaste,
+      paymentUrl: ensured.paymentUrl,
     };
   }
 
@@ -641,5 +694,6 @@ export async function ensureBalanceChargeForBooking(
     reused: false,
     amount: balance,
     pixCopyPaste: ensured.pixCopyPaste,
+    paymentUrl: ensured.paymentUrl,
   };
 }

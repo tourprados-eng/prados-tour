@@ -2,6 +2,7 @@ import QRCode from "qrcode";
 import { notFound } from "next/navigation";
 import { getSession } from "@/lib/auth/session";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
+import { isBookingFullyPaid } from "@/lib/payments/balance";
 import { formatCurrency, formatTime, formatTripDepartureDate, formatTripReturn, maskCpf } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 
@@ -36,8 +37,9 @@ export default async function VoucherPage({
         link.boardingPointId === booking.boardingPointId,
     )?.time ?? null;
 
-  // O voucher só é liberado após a confirmação de pagamento.
-  if (booking.status !== "CONFIRMADA") {
+  // O voucher só é liberado quando a reserva está INTEGRALMENTE paga (saldo 0),
+  // baseado no estado real do pagamento — não apenas no status CONFIRMADA.
+  if (!isBookingFullyPaid(store, booking.id)) {
     return (
       <div className="mx-auto max-w-lg px-4 py-12">
         <div className="rounded-3xl bg-white p-8 text-center shadow-lg ring-1 ring-black/5">
@@ -53,9 +55,9 @@ export default async function VoucherPage({
             Este voucher ainda não está disponível.
           </p>
           <p className="mt-3 text-sm text-black/60">
-            O pagamento da reserva <strong>{booking.reference}</strong> ainda
-            está pendente. Assim que a confirmação do seu pagamento chegar, o
-            voucher com os dados de embarque será liberado aqui mesmo.
+            A reserva <strong>{booking.reference}</strong> ainda não está 100%
+            paga. Assim que o valor total estiver quitado, o voucher com os
+            dados de embarque será liberado aqui mesmo.
           </p>
 
           {payment && (

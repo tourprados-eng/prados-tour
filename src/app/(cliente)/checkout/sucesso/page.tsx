@@ -3,6 +3,7 @@ import QRCode from "qrcode";
 import { notFound } from "next/navigation";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import { getSession } from "@/lib/auth/session";
+import { isBookingFullyPaid } from "@/lib/payments/balance";
 import { formatCurrency, formatDate, formatTripDepartureDate } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { PixCopyButton } from "@/components/checkout/pix-copy-button";
@@ -133,9 +134,10 @@ export default async function CheckoutSuccessPage({
         )}
 
         <div className="mt-8 flex flex-wrap gap-3">
-          {booking.status === "CONFIRMADA" && (
-            <Button href={`/voucher/${booking.id}`}>Ver voucher</Button>
-          )}
+          {booking.status === "CONFIRMADA" &&
+            isBookingFullyPaid(store, booking.id) && (
+              <Button href={`/voucher/${booking.id}`}>Ver voucher</Button>
+            )}
           <Button href="/minhas-viagens" variant="outline">
             Minhas viagens
           </Button>

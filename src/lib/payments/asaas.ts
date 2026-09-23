@@ -72,7 +72,15 @@ export type AsaasPayment = {
   dueDate: string;
   description?: string | null;
   externalReference?: string | null;
+  paymentUrl?: string | null;
+  invoiceUrl?: string | null;
 };
+
+/** Link web de pagamento de uma cobrança Asaas (paymentUrl, fallback invoiceUrl). */
+export function asaasPaymentLink(payment: { paymentUrl?: string | null; invoiceUrl?: string | null }): string | null {
+  const link = payment.paymentUrl?.trim() || payment.invoiceUrl?.trim() || "";
+  return link || null;
+}
 
 export type AsaasPixQrCode = {
   encodedImage: string;

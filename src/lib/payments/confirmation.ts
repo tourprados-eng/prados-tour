@@ -4,6 +4,7 @@ import { v4 as uuid } from "uuid";
 import { revalidatePath } from "next/cache";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import { getAsaasPayment } from "@/lib/payments/asaas";
+import { computeRemainingBalance } from "@/lib/payments/balance";
 import {
   claimAsaasWebhookEvent,
   completeAsaasWebhookEvent,
@@ -87,13 +88,22 @@ export async function confirmPaymentWebhook(gatewayPaymentId: string) {
         bookingId: booking.id,
         createdAt: now,
       });
+      // Voucher só é liberado com a reserva 100% paga (saldo = 0). A
+      // notificação informa o estado real; a regra de acesso do /voucher é
+      // derivada do pagamento, não deste texto.
+      const fullyPaidNow =
+        computeRemainingBalance(store, booking.id) <= MONEY_TOLERANCE;
       store.notifications.push({
         id: uuid(),
         userId: booking.customerId,
         title: isBalancePayment ? "Saldo confirmado" : "Pagamento confirmado",
         message: isBalancePayment
-          ? `Seu pagamento do saldo restante da reserva ${booking.reference} foi confirmado. Reserva totalmente quitada.`
-          : `Pagamento da reserva ${booking.reference} confirmado. Seu voucher já está disponível.`,
+          ? fullyPaidNow
+            ? `Seu pagamento do saldo restante da reserva ${booking.reference} foi confirmado. Reserva totalmente quitada. Seu voucher já está disponível.`
+            : `Seu pagamento do saldo restante da reserva ${booking.reference} foi confirmado.`
+          : fullyPaidNow
+            ? `Pagamento da reserva ${booking.reference} confirmado. Seu voucher já está disponível.`
+            : `Pagamento da reserva ${booking.reference} confirmado. Falta quitar o saldo restante para liberar o voucher.`,
         type: isBalancePayment ? "SALDO" : "PAGAMENTO",
         read: false,
         createdAt: now,

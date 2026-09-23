@@ -3,7 +3,7 @@ import { BusFront, Luggage, MapPin, Shell, ShieldCheck, Sparkles, Users } from "
 import { requireUser } from "@/lib/auth/actions";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import { formatCurrency, formatTripDepartureDate } from "@/lib/utils";
-import { getBalanceInfo } from "@/lib/payments/balance";
+import { getBalanceInfo, isBookingFullyPaid } from "@/lib/payments/balance";
 import { PhotoShareCard } from "@/components/gallery/photo-share-card";
 import { HomeHero } from "@/components/home/hero";
 import { Button } from "@/components/ui/button";
@@ -89,6 +89,7 @@ function BookingCard({
   const tripDate = trip ? formatTripDepartureDate(trip) : "—";
   const passengers =
     booking.quantity === 1 ? "1 passageiro" : `${booking.quantity} passageiros`;
+  const fullyPaid = isBookingFullyPaid(store, booking.id);
 
   return (
     <div className="flex flex-col gap-3 rounded-3xl bg-white/90 p-5 shadow-card ring-1 ring-black/5 sm:flex-row sm:items-center sm:justify-between">
@@ -108,12 +109,18 @@ function BookingCard({
       </div>
       <div className="flex flex-col items-start gap-3 sm:items-end">
         {booking.status === "CONFIRMADA" ? (
-          <Link
-            href={`/voucher/${booking.id}`}
-            className="text-sm font-semibold text-brand-primary hover:underline"
-          >
-            Ver voucher
-          </Link>
+          fullyPaid ? (
+            <Link
+              href={`/voucher/${booking.id}`}
+              className="text-sm font-semibold text-brand-primary hover:underline"
+            >
+              Ver voucher
+            </Link>
+          ) : (
+            <span className="text-xs font-semibold text-brand-muted">
+              Voucher após quitar o saldo
+            </span>
+          )
         ) : (
           <Link
             href={`/checkout/sucesso?booking=${booking.id}`}
