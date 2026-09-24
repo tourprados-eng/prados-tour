@@ -142,24 +142,6 @@ export function ClientGalleryCarousel({
 
               <div className="absolute inset-0 bg-transparent transition duration-300 group-hover:bg-black/5" />
 
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/80 via-black/25 to-transparent p-6 pt-28">
-                <div className="flex items-center gap-2">
-                  <MapPin
-                    className="h-6 w-6 shrink-0 text-brand-primary"
-                    fill="currentColor"
-                  />
-                  <p className="text-lg font-extrabold text-white">
-                    {current.label}
-                  </p>
-                </div>
-
-                {current.caption && (
-                  <p className="mt-1.5 max-w-2xl text-sm leading-relaxed text-white/95">
-                    {current.caption}
-                  </p>
-                )}
-              </div>
-
               {items.length > 1 && (
                 <span className="absolute right-5 top-5 rounded-full border border-white/30 bg-black/55 px-4 py-2 text-sm font-bold text-white backdrop-blur-md">
                   {index + 1} / {items.length}
@@ -198,6 +180,25 @@ export function ClientGalleryCarousel({
                 Clique para ampliar
               </span>
             </button>
+          </div>
+
+          {/* Legenda da foto (fora da imagem) */}
+          <div className="mx-auto mt-5 flex w-fit max-w-full items-start justify-center gap-2 rounded-[1rem] bg-white/60 px-5 py-3 shadow-sm ring-1 ring-brand-primary/10">
+            <MapPin
+              className="mt-0.5 h-5 w-5 shrink-0 text-brand-primary"
+              fill="currentColor"
+            />
+            <div className="min-w-0 text-center">
+              <p className="font-extrabold text-brand-primary">
+                {current.label}
+              </p>
+
+              {current.caption && (
+                <p className="mt-0.5 text-sm leading-relaxed text-brand-muted">
+                  {current.caption}
+                </p>
+              )}
+            </div>
           </div>
 
           {/* Miniaturas */}
@@ -253,10 +254,10 @@ export function ClientGalleryCarousel({
         </div>
       </div>
 
-      {/* Lightbox */}
+      {/* Lightbox — foto grande limpa */}
       {lightboxOpen && (
         <div
-          className="fixed inset-0 z-[100] flex items-center justify-center bg-black/85 p-4 backdrop-blur-sm"
+          className="fixed inset-0 z-[100] flex overflow-y-auto bg-black/85 p-4 backdrop-blur-sm"
           role="dialog"
           aria-modal="true"
           aria-label="Visualização ampliada da foto"
@@ -272,52 +273,52 @@ export function ClientGalleryCarousel({
           </button>
 
           <div
-            className="relative w-full max-w-6xl"
+            className="relative m-auto flex w-full max-w-6xl flex-col items-center justify-center gap-5 md:flex-row md:gap-7"
             onClick={(event) => event.stopPropagation()}
           >
-            <div className="relative overflow-hidden rounded-2xl bg-black shadow-[0_25px_80px_rgba(0,0,0,0.5)]">
+            <div className="relative flex min-h-0 w-full items-center justify-center md:w-auto">
+              {items.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => go(-1)}
+                  aria-label="Foto anterior"
+                  className="absolute left-2 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/95 text-brand-primary shadow-xl transition hover:scale-105"
+                >
+                  <ChevronLeft className="h-6 w-6" />
+                </button>
+              )}
+
               <img
                 src={current.src}
                 alt={current.caption || current.label}
-                className="max-h-[85vh] w-full object-contain"
+                className="max-h-[70vh] w-auto max-w-full rounded-2xl object-contain shadow-[0_25px_80px_rgba(0,0,0,0.5)] md:max-h-[85vh]"
               />
 
-              <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/30 to-transparent p-6 pt-24">
-                <p className="text-lg font-extrabold text-white">
-                  {current.label}
-                </p>
-
-                {current.caption && (
-                  <p className="mt-1 max-w-3xl text-sm text-white/90">
-                    {current.caption}
-                  </p>
-                )}
-              </div>
-
               {items.length > 1 && (
-                <>
-                  <button
-                    type="button"
-                    onClick={() => go(-1)}
-                    aria-label="Foto anterior"
-                    className="absolute left-4 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/95 text-brand-primary shadow-xl transition hover:scale-105"
-                  >
-                    <ChevronLeft className="h-6 w-6" />
-                  </button>
+                <button
+                  type="button"
+                  onClick={() => go(1)}
+                  aria-label="Próxima foto"
+                  className="absolute right-2 top-1/2 z-10 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/95 text-brand-primary shadow-xl transition hover:scale-105"
+                >
+                  <ChevronRight className="h-6 w-6" />
+                </button>
+              )}
+            </div>
 
-                  <button
-                    type="button"
-                    onClick={() => go(1)}
-                    aria-label="Próxima foto"
-                    className="absolute right-4 top-1/2 flex h-12 w-12 -translate-y-1/2 items-center justify-center rounded-full bg-white/95 text-brand-primary shadow-xl transition hover:scale-105"
-                  >
-                    <ChevronRight className="h-6 w-6" />
-                  </button>
-                </>
+            <div className="flex max-w-md shrink-0 flex-col items-center text-center md:items-start md:text-left">
+              <h2 className="text-lg font-extrabold text-white md:text-xl">
+                {current.label}
+              </h2>
+
+              {current.caption && (
+                <p className="mt-2 text-sm leading-relaxed text-white/85">
+                  {current.caption}
+                </p>
               )}
 
               {items.length > 1 && (
-                <span className="absolute right-4 top-4 rounded-full bg-black/60 px-4 py-2 text-sm font-bold text-white backdrop-blur-md">
+                <span className="mt-4 rounded-full bg-white/10 px-4 py-1.5 text-sm font-bold text-white">
                   {index + 1} / {items.length}
                 </span>
               )}
