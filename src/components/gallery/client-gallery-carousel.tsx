@@ -132,12 +132,12 @@ export function ClientGalleryCarousel({
               type="button"
               onClick={openLightbox}
               aria-label="Ampliar foto"
-              className="group relative block aspect-[16/9] w-full overflow-hidden rounded-[1.85rem] bg-brand-tint text-left outline-none focus-visible:ring-4 focus-visible:ring-brand-primary/30"
+              className="group relative mx-auto block w-fit max-w-full overflow-hidden rounded-[1.85rem] bg-brand-tint text-left outline-none focus-visible:ring-4 focus-visible:ring-brand-primary/30"
             >
               <img
                 src={current.src}
                 alt={current.caption || current.label}
-                className="absolute inset-0 h-full w-full object-contain transition duration-500 group-hover:scale-[1.02]"
+                className="relative block h-auto w-auto max-h-[82vh] max-w-full rounded-[1.85rem] object-contain transition duration-500 group-hover:scale-[1.02]"
               />
 
               <div className="absolute inset-0 bg-transparent transition duration-300 group-hover:bg-black/5" />
