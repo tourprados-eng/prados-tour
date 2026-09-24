@@ -137,7 +137,7 @@ export function ClientGalleryCarousel({
               <img
                 src={current.src}
                 alt={current.caption || current.label}
-                className="absolute inset-0 h-full w-full object-cover transition duration-500 group-hover:scale-[1.02]"
+                className="absolute inset-0 h-full w-full object-contain transition duration-500 group-hover:scale-[1.02]"
               />
 
               <div className="absolute inset-0 bg-transparent transition duration-300 group-hover:bg-black/5" />
