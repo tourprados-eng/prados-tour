@@ -1,7 +1,7 @@
 import { timingSafeEqual } from "crypto";
 import { NextResponse } from "next/server";
 import { getAsaasWebhookToken } from "@/lib/env/server";
-import { processAsaasPaymentEvent } from "@/lib/payments/confirmation";
+import { getAsaasWebhookStage, processAsaasPaymentEvent } from "@/lib/payments/confirmation";
 
 /**
  * Compara o token do Asaas em tempo constante para evitar vazamento via timing.
@@ -46,13 +46,16 @@ export async function POST(request: Request) {
   let token: string | null;
   try {
     token = getAsaasWebhookToken();
-  } catch {
-    console.error("Configuração de webhook do Asaas inválida");
+  } catch (error) {
+    console.error("ASAAS WEBHOOK CONFIG ERROR", {
+      error: error instanceof Error ? error.message : "Erro desconhecido",
+    });
     return NextResponse.json({ error: "Webhook não configurado." }, { status: 503 });
   }
 
   const header = request.headers.get("asaas-access-token");
   if (!token || !header || !webhookTokenMatch(header, token)) {
+    console.warn("ASAAS WEBHOOK UNAUTHORIZED", { hasToken: Boolean(token), hasHeader: Boolean(header) });
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
@@ -62,8 +65,15 @@ export async function POST(request: Request) {
   const chargeId =
     typeof body?.payment?.id === "string" && body.payment.id ? body.payment.id : null;
   if (!eventId || !eventName || !chargeId) {
+    console.warn("ASAAS WEBHOOK PAYLOAD INVALIDO", {
+      eventId,
+      eventType: eventName,
+      paymentId: chargeId,
+    });
     return NextResponse.json({ error: "Payload inválido" }, { status: 400 });
   }
+
+  console.info("ASAAS WEBHOOK RECEBIDO", { eventId, eventType: eventName, paymentId: chargeId });
 
   try {
     const result = await processAsaasPaymentEvent({
@@ -74,10 +84,15 @@ export async function POST(request: Request) {
     if (result.status === "processing") {
       return NextResponse.json({ ok: false, retry: true }, { status: 503 });
     }
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, outcome: result.status });
   } catch (error) {
-    const message = error instanceof Error ? error.message : "Erro desconhecido";
-    console.error("[ASAAS WEBHOOK] Falha ao processar evento:", message);
+    console.error("ASAAS WEBHOOK ERROR", {
+      error: error instanceof Error ? error.message : "Erro desconhecido",
+      eventId,
+      eventType: eventName,
+      paymentId: chargeId,
+      stage: getAsaasWebhookStage(error),
+    });
     return NextResponse.json({ error: "Internal" }, { status: 500 });
   }
 }

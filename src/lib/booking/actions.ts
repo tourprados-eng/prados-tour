@@ -4,10 +4,18 @@ import { v4 as uuid } from "uuid";
 import { createHash } from "node:crypto";
 import { revalidatePath } from "next/cache";
 import { redirect } from "next/navigation";
-import { z } from "zod";
 import { getSession, canAccess } from "@/lib/auth/session";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
-import { isValidCpf, onlyDigits } from "@/lib/utils";
+import { onlyDigits } from "@/lib/utils";
+import {
+  collectPassengerIssuesForQuantity,
+  formatPassengerIssuesMessage,
+  normalizePassengerName,
+  PASSENGER_FIELD_LABELS,
+  PASSENGER_REQUIRED_DATA_MESSAGE,
+  passengersSchema,
+  type PassengerIssueField,
+} from "@/lib/booking/passengers";
 import { canAccessRole } from "@/lib/roles";
 import { ageAtDate, computeBookingPrice, passengerCategory } from "@/lib/pricing";
 import type { DataStore, Payment, PaymentMethod, PaymentPlan, Trip } from "@/types";
@@ -27,6 +35,7 @@ import {
   type PaymentClaim,
 } from "@/lib/payments/claims";
 import { confirmPaymentWebhook } from "@/lib/payments/confirmation";
+import { computeRemainingBalance } from "@/lib/payments/balance";
 
 export type CheckoutInput = {
   tripId: string;
@@ -41,6 +50,9 @@ export type CheckoutInput = {
     cpf: string;
     birthDate: string;
     phone: string;
+    rg: string;
+    /** Declaração de veracidade aceita para este passageiro. */
+    dataDeclaration: boolean;
     seatGroup?: string;
   }>;
   sellerCode?: string;
@@ -52,29 +64,46 @@ export type CheckoutInput = {
   insurance?: boolean;
 };
 
-const birthDateSchema = z.string().refine((value) => {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const [y, m, d] = value.split("-").map(Number);
-  const date = new Date(y, m - 1, d);
-  if (date.getFullYear() !== y || date.getMonth() !== m - 1 || date.getDate() !== d) return false;
-  if (y < 1900) return false;
-  const today = new Date();
-  const cutoff = new Date(Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()));
-  return date.getTime() <= cutoff.getTime();
-}, { message: "Data de nascimento inválida." });
+/**
+ * Valida os dados de TODOS os passageiros da reserva (frontend e backend
+ * usam exatamente a mesma regra). Nenhum passageiro pode ficar de fora: a
+ * reserva só existe se a lista inteira for válida.
+ *
+ * Retorna `null` quando está tudo certo, ou a mensagem detailing exatamente
+ * qual passageiro e qual campo precisam ser preenchidos.
+ */
+function validateCheckoutPassengers(
+  passengers: CheckoutInput["passengers"] | null | undefined,
+  quantity?: number | null,
+): string | null {
+  if (!Array.isArray(passengers) || passengers.length === 0) {
+    return `${PASSENGER_REQUIRED_DATA_MESSAGE} • Informe ao menos um passageiro.`;
+  }
 
-const passengerSchema = z.object({
-  name: z.string().trim().min(3, "Informe o nome completo de cada passageiro."),
-  cpf: z.string().refine((v) => isValidCpf(v), { message: "CPF inválido." }),
-  birthDate: birthDateSchema,
-  phone: z
-    .string()
-    .transform(onlyDigits)
-    .refine((v) => v.length >= 10 && v.length <= 13, {
-      message: "Telefone inválido para um passageiro.",
-    }),
-  seatGroup: z.string().max(24).optional(),
-});
+  const issues = collectPassengerIssuesForQuantity(passengers, quantity);
+  if (issues.length > 0) {
+    return formatPassengerIssuesMessage(issues);
+  }
+
+  // Rede de segurança: garante também o tipo normalizado (CPF/telefone só
+  // com dígitos) usado na gravação, preservando passageiro e campo no erro.
+  const parsed = passengersSchema.safeParse(passengers);
+  if (!parsed.success) {
+    return formatPassengerIssuesMessage(
+      parsed.error.issues.map((issue) => {
+        const position = typeof issue.path[0] === "number" ? issue.path[0] : 0;
+        const field = String(issue.path[1] ?? "name");
+        return {
+          index: position + 1,
+          field: (field in PASSENGER_FIELD_LABELS ? field : "name") as PassengerIssueField,
+          message: issue.message,
+        };
+      }),
+    );
+  }
+
+  return null;
+}
 
 export async function createBookingAction(input: CheckoutInput) {
   const session = await getSession();
@@ -84,13 +113,12 @@ export async function createBookingAction(input: CheckoutInput) {
 
   let outcome: { bookingId: string; reference: string } | null = null;
 
-  const passengersResult = z.array(passengerSchema).safeParse(input.passengers ?? []);
-  if (!passengersResult.success) {
-    return {
-      error:
-        passengersResult.error.issues[0]?.message ??
-        "Dados de passageiros inválidos.",
-    };
+  // REGRA CENTRAL: nenhum passageiro pode estar incompleto. A validação roda
+  // ANTES de qualquer regra de preço, claim de PIX ou escrita — ou seja, uma
+  // reserva incompleta não é criada e não gera pagamento.
+  const passengersError = validateCheckoutPassengers(input.passengers, input.quantity);
+  if (passengersError) {
+    return { error: passengersError };
   }
 
   if (
@@ -169,6 +197,17 @@ export async function createBookingAction(input: CheckoutInput) {
   if (!outcome) {
     try {
       outcome = await getRepositoryRuntime().transaction(async (store) => {
+      // Segunda barreira (defesa em profundidade), dentro da transação e
+      // antes de qualquer escrita: mesmo já validado acima, nada é persistido
+      // se algum passageiro estiver incompleto.
+      const transactionPassengersError = validateCheckoutPassengers(
+        input.passengers,
+        input.quantity,
+      );
+      if (transactionPassengersError) {
+        throw new Error(transactionPassengersError);
+      }
+
       const trip = store.trips.find((t) => t.id === input.tripId);
       if (!trip || trip.status !== "PUBLICADA" || trip.deletedAt) {
         throw new Error("Viagem indisponível.");
@@ -176,6 +215,7 @@ export async function createBookingAction(input: CheckoutInput) {
       if (isPastTrip(trip.date)) {
         throw new Error("Data da viagem inválida.");
       }
+
       if (input.quantity < 1 || input.passengers.length !== input.quantity) {
         throw new Error("Quantidade de passageiros inválida.");
       }
@@ -329,10 +369,12 @@ export async function createBookingAction(input: CheckoutInput) {
         store.passengers.push({
           id: uuid(),
           bookingId,
-          name: p.name.trim(),
+          name: normalizePassengerName(p.name),
           cpf: onlyDigits(p.cpf),
           birthDate: p.birthDate,
           phone: onlyDigits(p.phone),
+          rg: p.rg.replace(/\s+/g, " ").trim(),
+          dataDeclarationAt: now,
           seatId,
           boardingPointId: boarding.id,
           seatGroup: p.seatGroup ?? null,
@@ -545,6 +587,89 @@ export async function createBookingAction(input: CheckoutInput) {
  * Preview autoritativo de preço para o checkout. O frontend exibe os descontos
  * calculados aqui; o valor final é recalculado novamente no createBookingAction.
  */
+export async function confirmBookingFormAction(bookingId: string) {
+  const session = await getSession();
+  if (!session) {
+    return { error: "Faça login para continuar." };
+  }
+
+  try {
+    await getRepositoryRuntime().transaction((store) => {
+      const booking = store.bookings.find((b) => b.id === bookingId);
+      if (!booking) throw new Error("Reserva não encontrada.");
+
+      if (
+        booking.customerId !== session.id &&
+        !["SUPER_ADMIN", "ADMIN", "FINANCEIRO", "VENDEDOR"].includes(session.role)
+      ) {
+        throw new Error("Sem permissão para confirmar este formulário.");
+      }
+
+      if (booking.status !== "CONFIRMADA") {
+        throw new Error("O pagamento da reserva ainda não foi confirmado.");
+      }
+
+      const trip = store.trips.find((t) => t.id === booking.tripId);
+      if (!trip) throw new Error("Viagem não encontrada.");
+
+      if (!trip.formRequired) {
+        return;
+      }
+
+      if (!trip.formUrl) {
+        throw new Error(
+          "O formulário obrigatório desta viagem não foi configurado.",
+        );
+      }
+
+      if (!booking.formConfirmedAt) {
+        const now = new Date().toISOString();
+        booking.formConfirmedAt = now;
+        booking.updatedAt = now;
+
+        store.notifications.push({
+          id: uuid(),
+          userId: booking.customerId,
+          title: "Formulário confirmado",
+          message: `O preenchimento do formulário da reserva ${booking.reference} foi confirmado. ${
+            computeRemainingBalance(store, booking.id) <= 0.01
+              ? "Seu voucher está disponível."
+              : "Seu voucher será liberado quando o saldo estiver quitado."
+          }`,
+          type: "RESERVA",
+          read: false,
+          createdAt: now,
+        });
+
+        store.auditLogs.push({
+          id: uuid(),
+          userId: session.id,
+          action: "CONFIRM_BOOKING_FORM",
+          entity: "booking",
+          entityId: booking.id,
+          oldValue: { formConfirmedAt: null },
+          newValue: { formConfirmedAt: now },
+          ip: null,
+          createdAt: now,
+        });
+      }
+    });
+  } catch (e) {
+    return {
+      error:
+        e instanceof Error
+          ? e.message
+          : "Não foi possível confirmar o formulário.",
+    };
+  }
+
+  revalidatePath(`/voucher/${bookingId}`);
+  revalidatePath(`/checkout/sucesso?booking=${bookingId}`);
+  revalidatePath("/minhas-viagens");
+
+  return { ok: true };
+}
+
 export async function previewBookingPriceAction(input: {
   tripId: string;
   quantity: number;

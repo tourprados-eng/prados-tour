@@ -152,6 +152,7 @@ export interface Booking {
   insuranceCount: number;
   insuranceAmount: number;
   clientRequestId?: string | null;
+  formConfirmedAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -163,6 +164,13 @@ export interface BookingPassenger {
   cpf: string | null;
   birthDate: string | null;
   phone: string | null;
+  /** RG do passageiro — obrigatório em toda reserva nova. */
+  rg: string | null;
+  /**
+   * Momento em que o passageiro aceitou a declaração de veracidade dos dados.
+   * Reservas antigas podem ter `null`; novas sempre gravam o instante.
+   */
+  dataDeclarationAt: string | null;
   seatId: string | null;
   boardingPointId: string | null;
   seatGroup: string | null;

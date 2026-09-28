@@ -6,6 +6,11 @@ import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import { getAsaasPayment } from "@/lib/payments/asaas";
 import { computeRemainingBalance } from "@/lib/payments/balance";
 import {
+  collectPassengerIssuesForQuantity,
+  formatPassengerIssuesMessage,
+  type PassengerIssue,
+} from "@/lib/booking/passengers";
+import {
   claimAsaasWebhookEvent,
   completeAsaasWebhookEvent,
   releaseAsaasWebhookEvent,
@@ -41,6 +46,73 @@ const ASAAS_CONFIRMING_EVENTS = new Set(["PAYMENT_CONFIRMED", "PAYMENT_RECEIVED"
 const ASAAS_RECEIVED_STATUSES = new Set(["CONFIRMED", "RECEIVED"]);
 const MONEY_TOLERANCE = 0.01;
 
+export type AsaasWebhookStage =
+  | "claim_event"
+  | "find_internal_payment"
+  | "payload_status"
+  | "external_reference"
+  | "value"
+  | "gateway_payment_id"
+  | "read_store"
+  | "find_booking"
+  | "passenger_validation"
+  | "remote_charge"
+  | "remote_value"
+  | "remote_reference"
+  | "confirm_payment"
+  | "complete_event";
+
+type StageTaggedError = Error & { asaasWebhookStage?: AsaasWebhookStage };
+
+/** Anexa a etapa que falhou ao erro, sem alterar a mensagem original. */
+function tagStage(error: unknown, stage: AsaasWebhookStage): StageTaggedError {
+  const base =
+    error instanceof Error
+      ? error
+      : new Error(`Falha inesperada (${typeof error}) no webhook do Asaas`);
+  const tagged = base as StageTaggedError;
+  tagged.asaasWebhookStage = stage;
+  return tagged;
+}
+
+export function getAsaasWebhookStage(error: unknown): AsaasWebhookStage | undefined {
+  return error instanceof Error
+    ? (error as StageTaggedError).asaasWebhookStage
+    : undefined;
+}
+
+/**
+ * Log de observabilidade do webhook. Registra APENAS identificadores
+ * (event id, tipo de evento, charge id e etapa) — nunca token, API key, CPF,
+ * payload, nome ou valor do passageiro.
+ */
+function logWebhook(
+  level: "info" | "error",
+  message: string,
+  context: {
+    eventId: string;
+    eventType: string;
+    paymentId: string | null;
+    stage?: AsaasWebhookStage;
+    outcome?: string;
+    error?: string;
+  },
+) {
+  const payload = {
+    eventId: context.eventId,
+    eventType: context.eventType,
+    paymentId: context.paymentId,
+    ...(context.stage ? { stage: context.stage } : {}),
+    ...(context.outcome ? { outcome: context.outcome } : {}),
+    ...(context.error ? { error: context.error } : {}),
+  };
+  if (level === "error") {
+    console.error(message, payload);
+    return;
+  }
+  console.info(message, payload);
+}
+
 /**
  * Confirmação real do pagamento (efeitos: Payment PAGO + paidAt, parcela
  * correspondente PAGO, Booking CONFIRMADA, pontos, notificação e liberação do
@@ -56,6 +128,25 @@ export async function confirmPaymentWebhook(gatewayPaymentId: string) {
     const payment = store.payments.find((p) => p.gatewayPaymentId === gatewayPaymentId);
     if (!payment || payment.status === "PAGO") return;
     const now = new Date().toISOString();
+    const booking = store.bookings.find((b) => b.id === payment.bookingId);
+
+    // REGRA CENTRAL, SEM EXCEÇÃO: nenhum pagamento confirma uma reserva cujos
+    // passageiros estejam incompletos — nem em reserva já CONFIRMADA ou
+    // CONCLUIDA. Uma reserva legada confirmada sem RG/declaração NÃO ganha
+    // isenção: enquanto os dados não forem corrigidos, o pagamento não é
+    // confirmado e o voucher não é liberado.
+    if (booking) {
+      const issues = collectPassengerIssuesForQuantity(
+        store.passengers.filter((p) => p.bookingId === booking.id),
+        booking.quantity,
+      );
+      if (issues.length > 0) {
+        throw new Error(
+          `Pagamento não confirmado: ${formatPassengerIssuesMessage(issues)}`,
+        );
+      }
+    }
+
     payment.status = "PAGO";
     payment.paidAt = now;
 
@@ -76,7 +167,6 @@ export async function confirmPaymentWebhook(gatewayPaymentId: string) {
       installment.paidAt = now;
       installment.method = payment.method;
     }
-    const booking = store.bookings.find((b) => b.id === payment.bookingId);
     if (booking) {
       booking.status = "CONFIRMADA";
       booking.updatedAt = now;
@@ -150,6 +240,7 @@ const DEFINITIVE_IGNORES = new Set([
   "value_mismatch",
   "remote_value_mismatch",
   "remote_reference_mismatch",
+  "passenger_data_incomplete",
 ]);
 
 /** Falhas TRANSITÓRIAS: liberam a row para reprocessar o MESMO event_id. */
@@ -170,36 +261,63 @@ export async function processAsaasPaymentEvent(
   const eventName = payload.event;
   const rawPayment = payload.payment ?? {};
   const chargeId = typeof rawPayment.id === "string" ? rawPayment.id : "";
+  const context = { eventId, eventType: eventName, paymentId: chargeId || null };
 
-  const claim = await claimAsaasWebhookEvent({ eventId, event: eventName, paymentId: chargeId });
-  if (!claim.claimed) {
-    if (claim.reason === "processed") {
-      return { status: "duplicate" };
-    }
-    return { status: "processing" };
-  }
-
-  if (!ASAAS_CONFIRMING_EVENTS.has(eventName)) {
-    await completeAsaasWebhookEvent(eventId);
-    return { status: "ignored", reason: "event_not_supported" };
-  }
-
+  let stage: AsaasWebhookStage = "claim_event";
   try {
+    const claim = await claimAsaasWebhookEvent({ eventId, event: eventName, paymentId: chargeId });
+    if (!claim.claimed) {
+      if (claim.reason === "processed") {
+        logWebhook("info", "ASAAS WEBHOOK DUPLICADO", {
+          ...context,
+          stage,
+          outcome: "already_processed",
+        });
+        return { status: "duplicate" };
+      }
+      logWebhook("info", "ASAAS WEBHOOK EM PROCESSAMENTO", {
+        ...context,
+        stage,
+        outcome: "in_flight",
+      });
+      return { status: "processing" };
+    }
+    logWebhook("info", "ASAAS WEBHOOK CLAIMED", { ...context, stage });
+
+    if (!ASAAS_CONFIRMING_EVENTS.has(eventName)) {
+      await completeAsaasWebhookEvent(eventId);
+      logWebhook("info", "ASAAS WEBHOOK IGNORADO", {
+        ...context,
+        stage,
+        outcome: "event_not_supported",
+      });
+      return { status: "ignored", reason: "event_not_supported" };
+    }
+
+    stage = "find_internal_payment";
     const internalPayment = await findAsaasInternalPayment(chargeId);
     if (!internalPayment || internalPayment.gateway !== "asaas") {
-      // Cobranças antigas que já não existem no banco não podem ser
-      // confirmadas. Consome o evento para não bloquear a fila do Asaas.
       await completeAsaasWebhookEvent(eventId);
+      logWebhook("info", "ASAAS WEBHOOK IGNORADO", {
+        ...context,
+        stage,
+        outcome: "payment_not_found",
+      });
       return { status: "ignored", reason: "payment_not_found" };
     }
 
     if (eventName === "PAYMENT_CONFIRMED") {
       await completeAsaasWebhookEvent(eventId);
+      logWebhook("info", "ASAAS WEBHOOK REGISTRADO", {
+        ...context,
+        stage,
+        outcome: "registered_only",
+      });
       return { status: "registered_only" };
     }
 
+    stage = "payload_status";
     if (!ASAAS_RECEIVED_STATUSES.has(String(rawPayment.status ?? ""))) {
-      await releaseAsaasWebhookEvent(eventId);
       throw new Error(`Status do payload ainda não recebido: ${String(rawPayment.status)}`);
     }
 
@@ -211,63 +329,161 @@ export async function processAsaasPaymentEvent(
     const expectedExternalReference =
       internalPayment.asaasExternalReference ?? `PRADOS-TOUR:${internalPayment.id}`;
 
+    stage = "external_reference";
     if (
       externalReference !== null &&
       externalReference !== expectedExternalReference
     ) {
       await completeAsaasWebhookEvent(eventId);
+      logWebhook("info", "ASAAS WEBHOOK IGNORADO", {
+        ...context,
+        stage,
+        outcome: "external_reference_mismatch",
+      });
       return { status: "ignored", reason: "external_reference_mismatch" };
     }
 
+    stage = "value";
     if (
       payloadValue !== null &&
       Math.abs(payloadValue - Number(internalPayment.amount)) > MONEY_TOLERANCE
     ) {
       await completeAsaasWebhookEvent(eventId);
+      logWebhook("info", "ASAAS WEBHOOK IGNORADO", {
+        ...context,
+        stage,
+        outcome: "value_mismatch",
+      });
       return { status: "ignored", reason: "value_mismatch" };
     }
 
+    stage = "gateway_payment_id";
     if (!internalPayment.gatewayPaymentId) {
-      await releaseAsaasWebhookEvent(eventId);
       throw new Error(`Payment sem gatewayPaymentId: ${internalPayment.id}`);
     }
 
+    stage = "read_store";
     const store = await getRepositoryRuntime().read();
+    stage = "find_booking";
     const booking = store.bookings.find((b) => b.id === internalPayment.bookingId);
     if (!booking) {
-      await releaseAsaasWebhookEvent(eventId);
       throw new Error(`Booking não encontrada para o pagamento: ${internalPayment.id}`);
     }
 
+    // REGRA CENTRAL, SEM EXCEÇÃO: um pagamento não confirma uma reserva cujos
+    // passageiros estejam incompletos, INCLUSIVE se a reserva já estiver
+    // CONFIRMADA/CONCLUIDA (herança legada não concede isenção). É uma
+    // rejeição DEFINITIVA — o evento é consumido em vez de reentregar para
+    // sempre — e o cliente é notificado para corrigir os dados.
+    stage = "passenger_validation";
+    {
+      const issues = collectPassengerIssuesForQuantity(
+        store.passengers.filter((p) => p.bookingId === booking.id),
+        booking.quantity,
+      );
+      if (issues.length > 0) {
+        await notifyIncompletePassengers(booking, issues);
+        await completeAsaasWebhookEvent(eventId);
+        logWebhook("info", "ASAAS WEBHOOK IGNORADO", {
+          ...context,
+          stage,
+          outcome: "passenger_data_incomplete",
+        });
+        return { status: "ignored", reason: "passenger_data_incomplete" };
+      }
+    }
+
+    stage = "remote_charge";
     const remoteCharge = await getAsaasPayment(internalPayment.gatewayPaymentId);
     if (!ASAAS_RECEIVED_STATUSES.has(remoteCharge.status)) {
-      await releaseAsaasWebhookEvent(eventId);
       throw new Error(`Cobrança no Asaas ainda não recebida: ${remoteCharge.status}`);
     }
+    stage = "remote_value";
     if (Math.abs(Number(remoteCharge.value) - Number(internalPayment.amount)) > MONEY_TOLERANCE) {
       await completeAsaasWebhookEvent(eventId);
+      logWebhook("info", "ASAAS WEBHOOK IGNORADO", {
+        ...context,
+        stage,
+        outcome: "remote_value_mismatch",
+      });
       return { status: "ignored", reason: "remote_value_mismatch" };
     }
+    stage = "remote_reference";
     if (
       remoteCharge.externalReference &&
       remoteCharge.externalReference !== expectedExternalReference
     ) {
       await completeAsaasWebhookEvent(eventId);
+      logWebhook("info", "ASAAS WEBHOOK IGNORADO", {
+        ...context,
+        stage,
+        outcome: "remote_reference_mismatch",
+      });
       return { status: "ignored", reason: "remote_reference_mismatch" };
     }
 
+    stage = "confirm_payment";
     await confirmPaymentWebhook(internalPayment.gatewayPaymentId);
+    stage = "complete_event";
     await completeAsaasWebhookEvent(eventId);
+    logWebhook("info", "ASAAS WEBHOOK CONFIRMADO", { ...context, stage, outcome: "confirmed" });
     return { status: "confirmed" };
   } catch (error) {
+    const tagged = tagStage(error, stage);
+    logWebhook("error", "ASAAS WEBHOOK ERROR", {
+      ...context,
+      stage,
+      error: tagged.message,
+    });
+    // Libera (e não completa) em TODA falha: é o que permite o Asaas reentregar
+    // o MESMO event.id depois da próxima tentativa.
     await releaseAsaasWebhookEvent(eventId).catch(() => undefined);
-    throw error;
+    throw tagged;
   }
 }
 
 /** Conjuntos exportados para auditoria/observabilidade (sem tokens/payload). */
 export const ASAAS_WEBHOOK_DEFINITIVE_IGNORES = DEFINITIVE_IGNORES;
 export const ASAAS_WEBHOOK_TRANSIENT_FAILURES = TRANSIENT_FAILURES;
+
+/**
+ * Avisa o cliente (e a equipe) que a reserva não foi confirmada por falta de
+ * dados completos dos passageiros. Falha de notificação não pode derrubar a
+ * rejeição do webhook — por isso o `.catch`.
+ */
+async function notifyIncompletePassengers(
+  booking: { id: string; reference: string; customerId: string },
+  issues: PassengerIssue[],
+) {
+  const message = formatPassengerIssuesMessage(issues);
+  try {
+    await getRepositoryRuntime().transaction((store) => {
+      const createdAt = new Date().toISOString();
+      store.notifications.push({
+        id: uuid(),
+        userId: booking.customerId,
+        title: "Dados dos passageiros incompletos",
+        message: `Sua reserva ${booking.reference} não foi confirmada. ${message}`,
+        type: "RESERVA",
+        read: false,
+        createdAt,
+      });
+      store.auditLogs.push({
+        id: uuid(),
+        userId: null,
+        action: "PAYMENT_REJECTED_INCOMPLETE_PASSENGERS",
+        entity: "booking",
+        entityId: booking.id,
+        oldValue: null,
+        newValue: { reference: booking.reference, issues: issues.length },
+        ip: null,
+        createdAt,
+      });
+    });
+  } catch (error) {
+    console.error("[ASAAS] falha ao notificar dados incompletos:", error);
+  }
+}
 
 async function findAsaasInternalPayment(chargeId: string) {
   if (!chargeId) return null;

@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { PixCopyButton } from "@/components/checkout/pix-copy-button";
 import { simulateGatewayConfirm } from "@/lib/booking/actions";
 import { buildWhatsAppUrl } from "@/lib/contact";
+import { PostPaymentForm } from "@/components/checkout/post-payment-form";
 
 export default async function CheckoutSuccessPage({
   searchParams,
@@ -133,9 +134,20 @@ export default async function CheckoutSuccessPage({
           </div>
         )}
 
+        {booking.status === "CONFIRMADA" &&
+          trip.formRequired &&
+          trip.formUrl &&
+          !booking.formConfirmedAt && (
+            <PostPaymentForm
+              bookingId={booking.id}
+              formUrl={trip.formUrl}
+            />
+          )}
+
         <div className="mt-8 flex flex-wrap gap-3">
           {booking.status === "CONFIRMADA" &&
-            isBookingFullyPaid(store, booking.id) && (
+            isBookingFullyPaid(store, booking.id) &&
+            (!trip.formRequired || Boolean(booking.formConfirmedAt)) && (
               <Button href={`/voucher/${booking.id}`}>Ver voucher</Button>
             )}
           <Button href="/minhas-viagens" variant="outline">

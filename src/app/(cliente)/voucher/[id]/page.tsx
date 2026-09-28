@@ -5,6 +5,7 @@ import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import { isBookingFullyPaid } from "@/lib/payments/balance";
 import { formatCurrency, formatTime, formatTripDepartureDate, formatTripReturn, maskCpf } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
+import { PostPaymentForm } from "@/components/checkout/post-payment-form";
 
 export default async function VoucherPage({
   params,
@@ -79,6 +80,52 @@ export default async function VoucherPage({
             <Button href={`/checkout/sucesso?booking=${booking.id}`}>
               Ver orientações de pagamento
             </Button>
+            <Button href="/minhas-viagens" variant="outline">
+              Minhas viagens
+            </Button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // O voucher também depende da confirmação do formulário obrigatório.
+  if (trip.formRequired && !booking.formConfirmedAt) {
+    return (
+      <div className="mx-auto max-w-lg px-4 py-12">
+        <div className="rounded-3xl bg-white p-8 shadow-lg ring-1 ring-black/5">
+          <div className="text-center">
+            <p className="text-sm font-semibold uppercase tracking-widest text-[var(--brand-primary)]">
+              {store.brand.companyName}
+            </p>
+            <h1 className="mt-2 font-[family-name:var(--font-display)] text-3xl font-bold">
+              Voucher
+            </h1>
+            <p className="mt-1 text-lg font-bold">{booking.reference}</p>
+
+            <p className="mt-6 rounded-2xl bg-amber-50 p-4 text-sm text-amber-900">
+              Seu pagamento foi confirmado, mas o voucher ainda está bloqueado.
+            </p>
+
+            <p className="mt-3 text-sm text-black/60">
+              Preencha o formulário obrigatório com os dados dos passageiros.
+              Depois de confirmar o preenchimento, seu voucher será liberado.
+            </p>
+          </div>
+
+          {trip.formUrl ? (
+            <PostPaymentForm
+              bookingId={booking.id}
+              formUrl={trip.formUrl}
+            />
+          ) : (
+            <div className="mt-6 rounded-2xl border border-red-200 bg-red-50 p-4 text-center text-sm font-medium text-red-700">
+              O formulário obrigatório desta viagem ainda não foi configurado.
+              Entre em contato com a Prado&apos;s Tour para regularizar a reserva.
+            </div>
+          )}
+
+          <div className="mt-7 flex justify-center">
             <Button href="/minhas-viagens" variant="outline">
               Minhas viagens
             </Button>

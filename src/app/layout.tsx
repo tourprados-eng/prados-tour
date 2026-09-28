@@ -1,5 +1,7 @@
 import type { Metadata, Viewport } from "next";
 import { Outfit } from "next/font/google";
+import { Suspense } from "react";
+import GoogleAnalytics from "@/components/analytics/google-analytics";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import "./globals.css";
 
@@ -36,6 +38,9 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <body className={`${outfit.variable} antialiased`}>
+        <Suspense>
+          <GoogleAnalytics />
+        </Suspense>
         {children}
       </body>
     </html>

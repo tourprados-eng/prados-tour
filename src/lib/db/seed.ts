@@ -328,6 +328,8 @@ export async function createSeedStore(): Promise<DataStore> {
         cpf: "88621577949",
         birthDate: "1995-11-02",
         phone: "11955554444",
+        rg: "35.482.790-2",
+        dataDeclarationAt: now,
         seatId: seat.id,
         boardingPointId: bp1,
         seatGroup: null,

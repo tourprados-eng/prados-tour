@@ -4,7 +4,17 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createBookingAction, previewBookingPriceAction } from "@/lib/booking/actions";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/form";
-import { formatCurrency, formatTime, formatTripDepartureDate, formatTripReturn, isValidCpf } from "@/lib/utils";
+import { formatCurrency, formatTime, formatTripDepartureDate, formatTripReturn } from "@/lib/utils";
+import {
+  collectPassengerIssuesForQuantity,
+  formatCpfInput,
+  formatPassengerIssuesMessage,
+  formatPhoneInput,
+  PASSENGER_DECLARATION_TEXT,
+  PASSENGER_FIELD_INPUT_LABELS,
+  PASSENGER_REQUIRED_DATA_MESSAGE,
+  type PassengerIssue,
+} from "@/lib/booking/passengers";
 import { passengerCategory } from "@/lib/pricing";
 import { SELLER_CODE_STORAGE_KEY } from "@/components/layout/seller-tracker";
 import type { BoardingPoint, Trip } from "@/types";
@@ -34,6 +44,8 @@ type PassengerDraft = {
   cpf: string;
   birthDate: string;
   phone: string;
+  rg: string;
+  dataDeclaration: boolean;
   seatGroup: string;
 };
 
@@ -50,36 +62,21 @@ function onlyDigits(value: string): string {
   return value.replace(/\D/g, "");
 }
 
-function isValidBirthDate(value: string): boolean {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return false;
-  const [y, m, d] = value.split("-").map(Number);
-  const date = new Date(y, m - 1, d);
-  if (
-    date.getFullYear() !== y ||
-    date.getMonth() !== m - 1 ||
-    date.getDate() !== d
-  ) {
-    return false;
-  }
-  if (y < 1900) return false;
-  const today = new Date();
-  const cutoff = new Date(
-    Date.UTC(today.getFullYear(), today.getMonth(), today.getDate()),
-  );
-  return date.getTime() <= cutoff.getTime();
-}
-
-function validatePassenger(p: PassengerDraft): string | null {
-  if (p.name.trim().length < 3) return "Informe o nome completo.";
-  if (!isValidCpf(p.cpf)) return "CPF inválido.";
-  if (!isValidBirthDate(p.birthDate)) return "Data de nascimento inválida.";
-  const phone = onlyDigits(p.phone);
-  if (phone.length < 10 || phone.length > 13) return "Telefone inválido.";
-  return null;
-}
-
 function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
+}
+
+/** Mensagem exibida sob um campo específico de um passageiro. */
+function issueFor(issues: PassengerIssue[], index: number, field: string): string | null {
+  return issues.find((issue) => issue.index === index && issue.field === field)?.message ?? null;
+}
+
+function FieldError({ message }: { message: string }) {
+  return (
+    <p className="mt-1.5 rounded-lg bg-red-50 px-2 py-1 text-xs font-medium text-red-700">
+      {message}
+    </p>
+  );
 }
 
 export function CheckoutWizard({
@@ -140,6 +137,8 @@ export function CheckoutWizard({
       cpf: "",
       birthDate: "",
       phone: defaultPhone,
+      rg: "",
+      dataDeclaration: false,
       seatGroup: "1",
     },
   ]);
@@ -221,6 +220,8 @@ export function CheckoutWizard({
           cpf: "",
           birthDate: "",
           phone: "",
+          rg: "",
+          dataDeclaration: false,
           seatGroup: "1",
         });
       }
@@ -228,6 +229,17 @@ export function CheckoutWizard({
       return copy.slice(0, total);
     });
   }
+
+  /**
+   * Pendências de todos os passageiros (mesma regra do backend). Enquanto
+   * houver uma, o botão de continuar/finalizar fica bloqueado e a reserva não
+   * é criada nem gera pagamento.
+   */
+  const passengerIssues = useMemo(
+    () => collectPassengerIssuesForQuantity(passengers, quantity),
+    [passengers, quantity],
+  );
+  const passengersComplete = passengerIssues.length === 0 && passengers.length === quantity;
 
   function submit() {
     if (submitted.current) return;
@@ -239,10 +251,9 @@ export function CheckoutWizard({
     }
 
     const problems: string[] = [];
-    passengers.forEach((p, idx) => {
-      const err = validatePassenger(p);
-      if (err) problems.push(`Passageiro ${idx + 1}: ${err}`);
-    });
+    if (passengerIssues.length > 0) {
+      problems.push(formatPassengerIssuesMessage(passengerIssues));
+    }
     if (responsibleEmail && !isValidEmail(responsibleEmail)) {
       problems.push("E-mail do responsável inválido.");
     }
@@ -274,6 +285,8 @@ export function CheckoutWizard({
             cpf: p.cpf,
             birthDate: p.birthDate,
             phone: p.phone,
+            rg: p.rg,
+            dataDeclaration: p.dataDeclaration,
             seatGroup: p.seatGroup,
           })),
         });
@@ -402,17 +415,36 @@ export function CheckoutWizard({
 
         {step === 1 && (
           <div className="space-y-6">
+            <div className="rounded-2xl border border-[#E84C91]/30 bg-[#FFF9FC] p-4">
+              <p className="text-sm font-bold uppercase tracking-wide text-[#E84C91]">
+                Dados obrigatórios do passageiro
+              </p>
+              <p className="mt-1 text-sm text-[#6B5B63]">
+                Todos os dados abaixo devem ser preenchidos corretamente para
+                <strong> todos</strong> os passageiros. Eles serão utilizados
+                para identificação e contato do passageiro. A reserva não pode
+                ser criada nem gerar pagamento com qualquer campo em branco.
+              </p>
+            </div>
+
             {passengers.map((p, idx) => {
-              const fieldError = validatePassenger(p);
+              const number = idx + 1;
+              const fieldIssues = ["name", "cpf", "phone", "rg", "birthDate"].filter(
+                (field) => issueFor(passengerIssues, number, field) !== null,
+              );
+              const declarationError = issueFor(passengerIssues, number, "declaration");
               const passengerType = p.birthDate
                 ? passengerCategory(p.birthDate, trip.date)
                 : null;
               return (
-                <div key={idx} className="grid gap-3 sm:grid-cols-2">
+                <div
+                  key={idx}
+                  className="grid gap-3 rounded-2xl border border-[#EBE4E7] bg-white p-4 sm:grid-cols-2"
+                >
                   <p className="sm:col-span-2 flex flex-wrap items-center gap-2 font-semibold text-[#2F2328]">
                     {idx === 0
                       ? "Responsável pela compra"
-                      : `Quem vai viajar junto — Passageiro ${idx + 1}`}
+                      : `Quem vai viajar junto — Passageiro ${number}`}
                     {passengerType && (
                       <span
                         className={`rounded-full px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide ${
@@ -424,16 +456,24 @@ export function CheckoutWizard({
                         {passengerType === "CRIANCA" ? "Criança" : "Adulto"}
                       </span>
                     )}
+                    <span className="rounded-full bg-[#F2D3E1] px-2.5 py-0.5 text-[11px] font-bold uppercase tracking-wide text-[#C52D70]">
+                      Dados obrigatórios
+                    </span>
                   </p>
                   {idx === 0 && (
                     <p className="sm:col-span-2 -mt-2 text-xs text-[#8A7A82]">
                       Contato de quem está fazendo esta reserva.
                     </p>
                   )}
+
                   <div className="sm:col-span-2">
-                    <Label>Nome completo</Label>
+                    <Label htmlFor={`passenger-${idx}-name`}>
+                      {PASSENGER_FIELD_INPUT_LABELS.name}
+                    </Label>
                     <Input
+                      id={`passenger-${idx}-name`}
                       value={p.name}
+                      placeholder="Nome e sobrenome"
                       onChange={(e) => {
                         const next = [...passengers];
                         next[idx] = { ...p, name: e.target.value };
@@ -441,22 +481,38 @@ export function CheckoutWizard({
                       }}
                       required
                     />
+                    {issueFor(passengerIssues, number, "name") && (
+                      <FieldError message={issueFor(passengerIssues, number, "name")!} />
+                    )}
                   </div>
+
                   <div>
-                    <Label>CPF</Label>
+                    <Label htmlFor={`passenger-${idx}-cpf`}>
+                      {PASSENGER_FIELD_INPUT_LABELS.cpf}
+                    </Label>
                     <Input
+                      id={`passenger-${idx}-cpf`}
+                      inputMode="numeric"
                       value={p.cpf}
                       placeholder="000.000.000-00"
                       onChange={(e) => {
                         const next = [...passengers];
-                        next[idx] = { ...p, cpf: e.target.value };
+                        next[idx] = { ...p, cpf: formatCpfInput(e.target.value) };
                         setPassengers(next);
                       }}
+                      required
                     />
+                    {issueFor(passengerIssues, number, "cpf") && (
+                      <FieldError message={issueFor(passengerIssues, number, "cpf")!} />
+                    )}
                   </div>
+
                   <div>
-                    <Label>Nascimento</Label>
+                    <Label htmlFor={`passenger-${idx}-birth`}>
+                      {PASSENGER_FIELD_INPUT_LABELS.birthDate}
+                    </Label>
                     <Input
+                      id={`passenger-${idx}-birth`}
                       type="date"
                       value={p.birthDate}
                       onChange={(e) => {
@@ -464,33 +520,88 @@ export function CheckoutWizard({
                         next[idx] = { ...p, birthDate: e.target.value };
                         setPassengers(next);
                       }}
+                      required
                     />
+                    {issueFor(passengerIssues, number, "birthDate") && (
+                      <FieldError message={issueFor(passengerIssues, number, "birthDate")!} />
+                    )}
                   </div>
+
                   <div className="sm:col-span-2">
-                    <Label>Telefone (WhatsApp)</Label>
+                    <Label htmlFor={`passenger-${idx}-phone`}>
+                      {PASSENGER_FIELD_INPUT_LABELS.phone}
+                    </Label>
                     <Input
+                      id={`passenger-${idx}-phone`}
+                      inputMode="tel"
                       value={p.phone}
                       placeholder="(11) 00000-0000"
                       onChange={(e) => {
                         const next = [...passengers];
-                        next[idx] = { ...p, phone: e.target.value };
+                        next[idx] = { ...p, phone: formatPhoneInput(e.target.value) };
                         setPassengers(next);
                       }}
+                      required
                     />
+                    {issueFor(passengerIssues, number, "phone") && (
+                      <FieldError message={issueFor(passengerIssues, number, "phone")!} />
+                    )}
                   </div>
+
+                  <div className="sm:col-span-2">
+                    <Label htmlFor={`passenger-${idx}-rg`}>
+                      {PASSENGER_FIELD_INPUT_LABELS.rg}
+                    </Label>
+                    <Input
+                      id={`passenger-${idx}-rg`}
+                      value={p.rg}
+                      placeholder="Ex.: 12.345.678-9"
+                      onChange={(e) => {
+                        const next = [...passengers];
+                        next[idx] = { ...p, rg: e.target.value };
+                        setPassengers(next);
+                      }}
+                      required
+                    />
+                    {issueFor(passengerIssues, number, "rg") && (
+                      <FieldError message={issueFor(passengerIssues, number, "rg")!} />
+                    )}
+                  </div>
+
                   {idx === 0 && (
                     <div className="sm:col-span-2">
-                      <Label>E-mail do responsável</Label>
+                      <Label htmlFor="responsible-email">E-mail do responsável</Label>
                       <Input
+                        id="responsible-email"
                         type="email"
                         value={responsibleEmail}
                         onChange={(e) => setResponsibleEmail(e.target.value)}
                       />
                     </div>
                   )}
-                  {fieldError && (
+
+                  <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-[#EBE4E7] bg-[#FAF7F8] p-4 sm:col-span-2">
+                    <input
+                      type="checkbox"
+                      checked={p.dataDeclaration}
+                      onChange={(e) => {
+                        const next = [...passengers];
+                        next[idx] = { ...p, dataDeclaration: e.target.checked };
+                        setPassengers(next);
+                      }}
+                      className="mt-0.5 h-5 w-5 shrink-0 accent-[#E84C91]"
+                      required
+                    />
+                    <span className="text-sm font-medium text-[#2F2328]">
+                      {PASSENGER_DECLARATION_TEXT}{" "}
+                      <span className="font-bold text-[#E84C91]">*</span>
+                    </span>
+                  </label>
+                  {declarationError && <FieldError message={declarationError} />}
+
+                  {fieldIssues.length > 0 && !declarationError && (
                     <p className="sm:col-span-2 rounded-xl bg-red-50 px-3 py-2 text-xs font-medium text-red-700">
-                      {fieldError}
+                      {PASSENGER_REQUIRED_DATA_MESSAGE}
                     </p>
                   )}
                 </div>
@@ -771,6 +882,13 @@ export function CheckoutWizard({
           </p>
         )}
 
+        {!passengersComplete && step !== 1 && (
+          <p className="mt-4 rounded-xl bg-red-50 px-3 py-2 text-sm font-medium text-red-700">
+            {PASSENGER_REQUIRED_DATA_MESSAGE} Volte à etapa de passageiros para
+            corrigir.
+          </p>
+        )}
+
         {failedBookingId && (
           <div className="mt-4 rounded-xl bg-amber-50 px-3 py-3 text-sm text-amber-900">
             <p className="font-semibold">
@@ -808,12 +926,21 @@ export function CheckoutWizard({
           {step < steps.length - 1 ? (
             <Button
               type="button"
+              // Nenhuma etapa avança com passageiro incompleto: o botão fica
+              // bloqueado e, se for clicado, volta para a etapa 1 com o erro.
+              disabled={step === 1 && !passengersComplete}
               onClick={() => {
                 commitQuantity();
                 if (step === 0 && quantity < 1) {
                   setError("Informe ao menos um passageiro.");
                   return;
                 }
+
+                if (step === 1 && !passengersComplete) {
+                  setError(formatPassengerIssuesMessage(passengerIssues));
+                  return;
+                }
+
                 setError(null);
                 setStep((s) => s + 1);
               }}
@@ -821,7 +948,11 @@ export function CheckoutWizard({
               Continuar
             </Button>
           ) : (
-            <Button type="button" onClick={submit} disabled={pending}>
+            <Button
+              type="button"
+              onClick={submit}
+              disabled={pending || !passengersComplete}
+            >
               {pending ? "Processando..." : "Confirmar reserva"}
             </Button>
           )}

@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import type {
   Booking,
+  BookingPassenger,
   DataStore,
   Payment,
   PaymentInstallment,
@@ -348,6 +349,27 @@ function makeBooking(id: string, reference: string, customerId: string, total: n
   };
 }
 
+/** Passageiro completo: a regra de obrigatoriedade vale também para reservas legadas. */
+function makeCompletePassenger(bookingId: string): BookingPassenger {
+  return {
+    id: `${bookingId}-pax1`,
+    bookingId,
+    name: "Maria Silva",
+    cpf: "52998224725",
+    phone: "11988887777",
+    rg: "12.345.678-9",
+    birthDate: "1990-05-10",
+    dataDeclarationAt: NOW,
+    price: 0,
+    priceCategory: "ADULTO" as const,
+    insurance: false,
+    seatAssignmentStatus: "PENDENTE",
+    seatId: null,
+    boardingPointId: null,
+    seatGroup: null,
+  } as unknown as BookingPassenger;
+}
+
 function makePaidPayment(
   bookingId: string,
   customerId: string,
@@ -452,6 +474,7 @@ function seedBookingWithHalfPaid(
   store.profiles.push(profile);
   store.trips.push(makeTrip());
   store.bookings.push(booking);
+  store.passengers.push(makeCompletePassenger(booking.id));
   store.payments.push(makePaidPayment(booking.id, profile.id, paidAmount, `pay_first_${booking.id}`));
   store.installments.push(makeInstallment1(booking.id, paidAmount));
 }

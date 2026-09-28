@@ -30,6 +30,11 @@ function normalizeStore(store: DataStore): DataStore {
     passenger.price ??= null;
     passenger.priceCategory ??= null;
     passenger.insurance ??= false;
+    // RG e declaração passaram a ser obrigatórios: linhas antigas podem ficar
+    // sem eles (a reserva continua válida e pode ser corrigida), mas a
+    // aplicação nunca cria passageiro novo sem os dois.
+    passenger.rg ??= null;
+    passenger.dataDeclarationAt ??= null;
   }
 
   // Normaliza reservas com campos novos.
