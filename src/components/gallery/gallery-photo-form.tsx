@@ -291,13 +291,13 @@ export function GalleryPhotoForm({
               key={photo.id}
               className="relative overflow-hidden rounded-2xl bg-brand-tint"
             >
-              <div className="relative aspect-[4/3] w-full">
+              <div className="relative flex aspect-[4/3] w-full items-center justify-center">
                 <Image
                   src={photo.preview}
                   alt={`Pré-visualização de ${photo.file.name}`}
                   fill
                   unoptimized
-                  className="object-cover"
+                  className="object-contain"
                 />
               </div>
               <button

@@ -2,8 +2,8 @@ import { NextResponse } from "next/server";
 import { mkdir, writeFile } from "fs/promises";
 import path from "path";
 import { randomUUID } from "crypto";
-import sharp from "sharp";
 import { getSession } from "@/lib/auth/session";
+import { prepareGalleryImage } from "@/lib/gallery/image";
 import {
   getDataBackend,
   getSupabaseEnvironment,
@@ -51,17 +51,10 @@ export async function POST(request: Request) {
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
-    const processedBuffer = await sharp(buffer)
-      .autoOrient()
-      .resize(1600, 900, {
-        fit: "cover",
-        position: "attention",
-      })
-      .jpeg({
-        quality: 88,
-        mozjpeg: true,
-      })
-      .toBuffer();
+    // A foto do cliente é enviada SEM CORTAR. `prepareGalleryImage` apenas
+    // orienta (EXIF) e recomprime — nunca redimensiona, nunca recorta.
+    // Nunca reintroduza um `resize(..., { fit: "cover" })` aqui.
+    const processedBuffer = await prepareGalleryImage(buffer);
 
     const filename = `${randomUUID()}.jpg`;
 

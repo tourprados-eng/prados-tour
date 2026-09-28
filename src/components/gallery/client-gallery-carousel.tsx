@@ -132,12 +132,12 @@ export function ClientGalleryCarousel({
               type="button"
               onClick={openLightbox}
               aria-label="Ampliar foto"
-              className="group relative mx-auto block w-fit max-w-full overflow-hidden rounded-[1.85rem] bg-brand-tint text-left outline-none focus-visible:ring-4 focus-visible:ring-brand-primary/30"
+              className="group relative mx-auto block w-fit max-w-full rounded-[1.85rem] bg-brand-tint text-left outline-none focus-visible:ring-4 focus-visible:ring-brand-primary/30"
             >
               <img
                 src={current.src}
                 alt={current.caption || current.label}
-                className="relative block h-auto w-auto max-h-[82vh] max-w-full rounded-[1.85rem] object-contain transition duration-500 group-hover:scale-[1.02]"
+                className="relative block h-auto w-auto max-h-[82vh] max-w-full rounded-[1.85rem] object-contain transition duration-500"
               />
 
               <div className="absolute inset-0 bg-transparent transition duration-300 group-hover:bg-black/5" />
@@ -211,7 +211,7 @@ export function ClientGalleryCarousel({
                     type="button"
                     onClick={() => setIndex(itemIndex)}
                     aria-label={`Ver foto ${itemIndex + 1}`}
-                    className={`relative h-14 w-20 shrink-0 overflow-hidden rounded-xl ring-2 transition duration-300 ${
+                    className={`relative flex h-14 w-20 shrink-0 items-center justify-center overflow-hidden rounded-xl bg-brand-tint ring-2 transition duration-300 ${
                       itemIndex === index
                         ? "scale-105 ring-brand-primary shadow-lg"
                         : "ring-transparent opacity-75 hover:opacity-100 hover:ring-brand-primary/50"
@@ -220,7 +220,7 @@ export function ClientGalleryCarousel({
                     <img
                       src={item.src}
                       alt=""
-                      className="absolute inset-0 h-full w-full object-cover"
+                      className="max-h-full max-w-full object-contain"
                     />
                   </button>
                 ))}

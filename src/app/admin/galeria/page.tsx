@@ -50,11 +50,11 @@ export default async function AdminGalleryPage() {
                 className="flex flex-col gap-4 rounded-2xl bg-white/90 p-4 ring-1 ring-black/5 lg:flex-row lg:items-start lg:justify-between"
               >
                 <div className="flex min-w-0 flex-1 flex-col gap-4 sm:flex-row">
-                  <div className="relative h-48 w-full shrink-0 overflow-hidden rounded-2xl bg-brand-tint sm:h-32 sm:w-44">
+                  <div className="flex h-48 w-full shrink-0 items-center justify-center overflow-hidden rounded-2xl bg-brand-tint sm:h-32 sm:w-44">
                     <img
                       src={`/api/gallery/view?id=${encodeURIComponent(photo.id)}`}
                       alt={photo.caption || "Foto enviada por cliente"}
-                      className="h-full w-full object-cover"
+                      className="max-h-full max-w-full object-contain"
                     />
                   </div>
 
