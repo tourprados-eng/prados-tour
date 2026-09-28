@@ -333,3 +333,184 @@ describe("createBookingAction aceita passageiro completo", () => {
     expect(passengers.every((p) => p.rg && p.dataDeclarationAt)).toBe(true);
   });
 });
+
+describe("updateBookingPassengersAction: caminho de correção apontado pela notificação", () => {
+  /** Reserva legada CONFIRMADA com passageiro sem RG e sem declaração. */
+  function legacyIncompleteStore(): DataStore {
+    const store = baselineStore();
+    store.bookings = [
+      {
+        id: "booking-1",
+        reference: "PT000003",
+        customerId: "cliente-1",
+        tripId: "viagem-1",
+        sellerId: null,
+        quantity: 1,
+        boardingPointId: "ponto-1",
+        boardingPoint: "Rodoviária Central",
+        totalAmount: 135,
+        baseAmount: 135,
+        discountAmount: 0,
+        couponCode: null,
+        childCount: 0,
+        insuranceCount: 0,
+        insuranceAmount: 0,
+        paymentPlan: "PARCIAL",
+        status: "CONFIRMADA",
+        notes: null,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ] as unknown as DataStore["bookings"];
+    store.passengers = [
+      {
+        id: "pax-1",
+        bookingId: "booking-1",
+        name: "Maria Silva",
+        cpf: "52998224725",
+        phone: "11988887777",
+        rg: null,
+        birthDate: "1990-05-10",
+        dataDeclarationAt: null,
+        price: 135,
+        priceCategory: "ADULTO",
+        insurance: false,
+        seatAssignmentStatus: "PENDENTE",
+        seatId: null,
+        boardingPointId: "ponto-1",
+        seatGroup: null,
+      },
+    ] as unknown as DataStore["passengers"];
+    return store;
+  }
+
+  const CORRIGIDO = {
+    name: "Maria Silva",
+    cpf: "529.982.247-25",
+    phone: "(11) 98888-7777",
+    rg: "12.345.678-9",
+    birthDate: "1990-05-10",
+    dataDeclaration: true,
+  };
+
+  async function corrigir(
+    passengers: Array<Record<string, unknown>>,
+    overrides: { bookingId?: string; role?: string } = {},
+  ) {
+    const { updateBookingPassengersAction } = await import("@/lib/booking/actions");
+    return updateBookingPassengersAction(overrides.bookingId ?? "booking-1", {
+      passengers,
+    } as never);
+  }
+
+  it("completa os dados e registra a auditoria", async () => {
+    fake.setData(legacyIncompleteStore());
+
+    const result = await corrigir([CORRIGIDO]);
+
+    expect(result).toMatchObject({ ok: true, reference: "PT000003" });
+    const passageiro = fake.getData().passengers[0] as unknown as Record<string, unknown>;
+    expect(passageiro.rg).toBe("12.345.678-9");
+    expect(passageiro.cpf).toBe("52998224725");
+    expect(passageiro.phone).toBe("11988887777");
+    expect(passageiro.dataDeclarationAt).toBeTruthy();
+    // A reserva não muda de status: a correção é só de dados.
+    expect(fake.getData().bookings[0].status).toBe("CONFIRMADA");
+    expect(fake.getData().auditLogs.at(-1)?.action).toBe("UPDATE_BOOKING_PASSENGERS");
+  });
+
+  it("recusa se ainda faltar dado obrigatório", async () => {
+    fake.setData(legacyIncompleteStore());
+
+    const result = await corrigir([{ ...CORRIGIDO, rg: "" }]);
+
+    expect(result).toHaveProperty("error");
+    expect((result as { error: string }).error).toMatch(/RG/);
+    const passageiro = fake.getData().passengers[0] as unknown as Record<string, unknown>;
+    expect(passageiro.rg).toBeNull();
+  });
+
+  it("recusa se a declaração não for marcada", async () => {
+    fake.setData(legacyIncompleteStore());
+
+    const result = await corrigir([{ ...CORRIGIDO, dataDeclaration: false }]);
+
+    expect((result as { error: string }).error).toContain("declaração");
+  });
+
+  it("recusa alterar a quantidade de passageiros", async () => {
+    fake.setData(legacyIncompleteStore());
+
+    const result = await corrigir([CORRIGIDO, { ...CORRIGIDO, name: "Joao Souza", cpf: "39053344705" }]);
+
+    expect((result as { error: string }).error).toMatch(/exige 1 passageiro/);
+    expect(fake.getData().passengers).toHaveLength(1);
+  });
+
+  it("recusa reserva inexistente", async () => {
+    fake.setData(legacyIncompleteStore());
+
+    const result = await corrigir([CORRIGIDO], { bookingId: "inexistente" });
+
+    expect((result as { error: string }).error).toBe("Reserva não encontrada.");
+  });
+
+  it("recusa reserva já CONCLUIDA", async () => {
+    fake.setData(legacyIncompleteStore());
+    const store = fake.getData();
+    store.bookings[0].status = "CONCLUIDA";
+    fake.setData(store);
+
+    const result = await corrigir([CORRIGIDO]);
+
+    expect((result as { error: string }).error).toMatch(/já foi concluída/);
+  });
+});
+
+describe("updateBookingPassengersAction: permissão", () => {
+  it("impede o cliente de corrigir reserva de outra pessoa", async () => {
+    const store = baselineStore();
+    store.bookings = [
+      {
+        id: "booking-alheio",
+        reference: "PT000009",
+        customerId: "outro-cliente",
+        tripId: "viagem-1",
+        sellerId: null,
+        quantity: 1,
+        boardingPointId: "ponto-1",
+        boardingPoint: "Rodoviária Central",
+        totalAmount: 100,
+        baseAmount: 100,
+        discountAmount: 0,
+        couponCode: null,
+        childCount: 0,
+        insuranceCount: 0,
+        insuranceAmount: 0,
+        paymentPlan: "TOTAL",
+        status: "CONFIRMADA",
+        notes: null,
+        createdAt: "2026-01-01T00:00:00.000Z",
+        updatedAt: "2026-01-01T00:00:00.000Z",
+      },
+    ] as unknown as DataStore["bookings"];
+    store.passengers = [] as unknown as DataStore["passengers"];
+    fake.setData(store);
+
+    const { updateBookingPassengersAction } = await import("@/lib/booking/actions");
+    const result = await updateBookingPassengersAction("booking-alheio", {
+      passengers: [
+        {
+          name: "Maria Silva",
+          cpf: "529.982.247-25",
+          phone: "(11) 98888-7777",
+          rg: "12.345.678-9",
+          birthDate: "1990-05-10",
+          dataDeclaration: true,
+        },
+      ],
+    } as never);
+
+    expect((result as { error: string }).error).toMatch(/Sem permissão/);
+  });
+});

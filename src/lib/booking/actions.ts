@@ -18,6 +18,11 @@ import {
 } from "@/lib/booking/passengers";
 import { canAccessRole } from "@/lib/roles";
 import { ageAtDate, computeBookingPrice, passengerCategory } from "@/lib/pricing";
+import {
+  isPastTrip,
+  isVendableTrip,
+  PAST_TRIP_MESSAGE,
+} from "@/lib/trips/availability";
 import type { DataStore, Payment, PaymentMethod, PaymentPlan, Trip } from "@/types";
 import {
   createAsaasPixPayment,
@@ -212,8 +217,10 @@ export async function createBookingAction(input: CheckoutInput) {
       if (!trip || trip.status !== "PUBLICADA" || trip.deletedAt) {
         throw new Error("Viagem indisponível.");
       }
-      if (isPastTrip(trip.date)) {
-        throw new Error("Data da viagem inválida.");
+      // Barreira de segurança: mesmo que o cliente tenha aberto o checkout
+      // antes da data virar, nenhuma reserva nova é criada para viagem vencida.
+      if (isPastTrip(trip)) {
+        throw new Error(PAST_TRIP_MESSAGE);
       }
 
       if (input.quantity < 1 || input.passengers.length !== input.quantity) {
@@ -702,8 +709,8 @@ export async function previewBookingPriceAction(input: {
   if (!trip || trip.status !== "PUBLICADA" || trip.deletedAt) {
     return { error: "Viagem indisponível." };
   }
-  if (isPastTrip(trip.date)) {
-    return { error: "Data da viagem inválida." };
+  if (isPastTrip(trip)) {
+    return { error: PAST_TRIP_MESSAGE };
   }
 
   const pricing = computeBookingPrice({
@@ -808,27 +815,61 @@ export async function deleteBookingAction(bookingId: string) {
 }
 
 /**
- * Uma viagem é vendável apenas se publicada, não excluída e com data futura.
- * Viagens com data passada não são oferecidas no catálogo público nem permitem
- * iniciar novas reservas (preview e criação).
+ * Uma viagem é vendável apenas se publicada, não excluída e com data ainda não
+ * vencida. Viagens com data passada não são oferecidas no catálogo público nem
+ * permitem iniciar novas reservas (preview e criação).
+ *
+ * A regra mora em `@/lib/trips/availability`, que compara o dia civil de São
+ * Paulo (não UTC) e usa `departureDate ?? date` como data efetiva. Não
+ * duplique a lógica aqui — apenas reutilize.
  */
-function isPastTrip(date: string): boolean {
-  return date < new Date().toISOString().slice(0, 10);
-}
-
-function isVendableTrip(trip: {
-  status: string;
-  deletedAt?: string | null;
-  date: string;
-}): boolean {
-  return trip.status === "PUBLICADA" && !trip.deletedAt && !isPastTrip(trip.date);
-}
 
 export async function getPublicTrips() {
   const store = await getRepositoryRuntime().read();
   return store.trips
     .filter((t) => isVendableTrip(t))
     .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/**
+ * Estado de uma viagem para exibição pública, distinguindo "já realizada" de
+ * "inexistente". Sem essa distinção, o 404 do detail page esconderia o motivo
+ * real e o cliente que chegou por URL antiga não receberia a orientação
+ * correta.
+ */
+export type PublicTripState =
+  | { status: "VENDAVEL"; data: NonNullable<Awaited<ReturnType<typeof getTripBySlug>>> }
+  | { status: "REALIZADA"; trip: Trip }
+  | { status: "INDISPONIVEL" };
+
+/**
+ * Statuses que já ficaram públicos em algum momento. Só para eles faz
+ * sentido responder "viagem já realizada" numa URL direta. RASCUNHO nunca foi
+ * público e não pode ser revelado; CANCELADA e ARQUIVADA não são "realizadas".
+ */
+const PUBLICLY_KNOWN_TRIP_STATUSES = ["PUBLICADA", "ESGOTADA", "FINALIZADA"];
+
+/**
+ * Consulta a viagem pelo slug e classifica a disponibilidade.
+ *
+ * Não remove nada do banco: uma viagem realizada continua existindo e
+ * consultável, apenas não é devolvida como comprável.
+ */
+export async function getPublicTripState(slug: string): Promise<PublicTripState> {
+  const store = await getRepositoryRuntime().read();
+  const trip = store.trips.find((t) => t.slug === slug);
+
+  if (!trip || trip.deletedAt) return { status: "INDISPONIVEL" };
+
+  const data = await getTripBySlug(slug);
+
+  if (data) return { status: "VENDAVEL", data };
+
+  const foiPublica = PUBLICLY_KNOWN_TRIP_STATUSES.includes(trip.status);
+
+  if (foiPublica && isPastTrip(trip)) return { status: "REALIZADA", trip };
+
+  return { status: "INDISPONIVEL" };
 }
 
 export async function getTripBySlug(slug: string) {
@@ -1285,5 +1326,150 @@ async function ensureAsaasPixPayment(
     if (!completed) {
       await releasePixClaim(paymentId).catch(() => undefined);
     }
+  }
+}
+
+/**
+ * Correção dos dados dos passageiros de uma reserva JÁ CRIADA.
+ *
+ * Caminho de suporte para a regra de passageiro obrigatório: quando o webhook
+ * recusa um pagamento porque faltam dados, o cliente precisa de um lugar para
+ * corrigir — sem isso, a notificação não tem efeito. Só corrige DADOS; não
+ * cria nem remove passageiro (a quantidade é a da reserva), não altera o
+ * status da reserva e não toca em pagamento.
+ *
+ * Se a reserva já estiver CONFIRMADA, a correção só é aceita quando TODOS os
+ * passageiros ficam completos — o trigger do banco é a última linha e
+ * rejeitaria de qualquer forma uma gravação parcial.
+ */
+export async function updateBookingPassengersAction(
+  bookingId: string,
+  input: { passengers: Array<Record<string, unknown>> },
+) {
+  const session = await getSession();
+  if (!session) {
+    return { error: "Faça login para corrigir os dados." };
+  }
+
+  const parsed = passengersSchema.safeParse(input.passengers ?? []);
+  if (!parsed.success) {
+    return {
+      error:
+        parsed.error.issues[0]?.message ?? "Dados de passageiros inválidos.",
+    };
+  }
+  const incoming = parsed.data;
+
+  try {
+    const outcome = await getRepositoryRuntime().transaction((store) => {
+      const booking = store.bookings.find((b) => b.id === bookingId);
+      if (!booking) throw new Error("Reserva não encontrada.");
+
+      if (
+        booking.customerId !== session.id &&
+        !["SUPER_ADMIN", "ADMIN", "FINANCEIRO", "VENDEDOR"].includes(session.role)
+      ) {
+        throw new Error("Sem permissão para corrigir esta reserva.");
+      }
+
+      if (booking.status === "CONCLUIDA") {
+        throw new Error(
+          "Esta viagem já foi concluída e os dados não podem mais ser alterados.",
+        );
+      }
+
+      const trip = store.trips.find((t) => t.id === booking.tripId);
+      if (!trip) throw new Error("Viagem não encontrada.");
+      if (isPastTrip(trip)) {
+        throw new Error(PAST_TRIP_MESSAGE);
+      }
+
+      // A quantidade é a da reserva: corrige-se o MESMO conjunto de passageiro.
+      if (incoming.length !== booking.quantity) {
+        throw new Error(
+          `A reserva exige ${booking.quantity} passageiro(s) e recebeu ${incoming.length}.`,
+        );
+      }
+
+      const existing = store.passengers.filter((p) => p.bookingId === booking.id);
+      if (existing.length !== incoming.length) {
+        throw new Error(
+          "A lista de passageiros não bate com a reserva. Fale com o atendimento.",
+        );
+      }
+
+      // A validação usa a DECLARAÇÃO QUE ESTÁ SENDO ENVIADA agora, não a antiga:
+      // uma reserva legada sem declaração é corrigida justamente marcando a caixa.
+      const now = new Date().toISOString();
+      const issues = collectPassengerIssuesForQuantity(
+        incoming.map((p, i) => ({
+          ...existing[i],
+          name: p.name,
+          cpf: p.cpf,
+          phone: p.phone,
+          rg: p.rg,
+          birthDate: p.birthDate,
+          dataDeclarationAt: p.dataDeclaration
+            ? (existing[i].dataDeclarationAt ?? now)
+            : null,
+        })),
+        booking.quantity,
+      );
+      if (issues.length > 0) {
+        throw new Error(formatPassengerIssuesMessage(issues));
+      }
+
+      const before = existing.map((p) => ({
+        name: p.name,
+        cpf: p.cpf,
+        phone: p.phone,
+        rg: p.rg,
+        birthDate: p.birthDate,
+      }));
+
+      incoming.forEach((next, i) => {
+        const target = existing[i];
+        target.name = normalizePassengerName(next.name);
+        // Mesma normalização do checkout: CPF e telefone só com dígitos, senão a
+        // busca por CPF (reconcile, lembretes, check-in) não encontra a linha.
+        target.cpf = onlyDigits(next.cpf);
+        target.phone = onlyDigits(next.phone);
+        target.rg = next.rg;
+        target.birthDate = next.birthDate;
+        target.dataDeclarationAt = now;
+      });
+
+      booking.updatedAt = now;
+
+      store.auditLogs.push({
+        id: uuid(),
+        userId: session.id,
+        action: "UPDATE_BOOKING_PASSENGERS",
+        entity: "booking",
+        entityId: booking.id,
+        oldValue: { reference: booking.reference, passengers: before },
+        newValue: {
+          reference: booking.reference,
+          passengers: incoming.length,
+          completo: true,
+        },
+        ip: null,
+        createdAt: now,
+      });
+
+      return { reference: booking.reference };
+    });
+
+    revalidatePath("/minhas-viagens");
+    revalidatePath("/notificacoes");
+    revalidatePath(`/minhas-viagens/${bookingId}/passageiros`);
+    revalidatePath(`/voucher/${bookingId}`);
+
+    return { ok: true, reference: outcome.reference };
+  } catch (e) {
+    return {
+      error:
+        e instanceof Error ? e.message : "Não foi possível salvar os dados.",
+    };
   }
 }

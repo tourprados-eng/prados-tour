@@ -463,7 +463,7 @@ async function notifyIncompletePassengers(
         id: uuid(),
         userId: booking.customerId,
         title: "Dados dos passageiros incompletos",
-        message: `Sua reserva ${booking.reference} não foi confirmada. ${message}`,
+        message: `Sua reserva ${booking.reference} não pôde ser confirmada. ${message} Corrija os dados em /minhas-viagens/${booking.id}/passageiros.`,
         type: "RESERVA",
         read: false,
         createdAt,
