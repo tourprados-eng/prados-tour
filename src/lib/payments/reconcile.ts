@@ -165,25 +165,41 @@ export async function reconcileExistingBalances(opts: {
         const confirmedStatuses = ["RECEIVED", "CONFIRMED", "RECEIVED_IN_CASH"];
         if (remote && confirmedStatuses.includes(String(remote.status))) {
           if (opts.apply) {
-            await confirmPaymentWebhook(existing.gatewayPaymentId).catch(
-              (error: unknown) => {
-                console.error(
-                  "[RECONCILE] confirmPaymentWebhook falhou:",
-                  error instanceof Error ? error.message : error,
-                );
-              },
-            );
-            report.items.push({
-              bookingId: booking.id,
-              reference: booking.reference,
-              customerId: booking.customerId,
-              tripId: booking.tripId,
-              balance: info.balance,
-              dueDate: info.dueDate,
-              status: "confirm_from_asaas",
-              detail: "Confirmado como pago via Asaas e webhook aplicado.",
-            });
-            report.confirmedExisting += 1;
+            // A falha NÃO é engolida: confirmar é a única escrita que muda
+            // estado financeiro, então o relatório só pode dizer
+            // `confirm_from_asaas` quando confirmPaymentWebhook_VOLTOU sem
+            // erro. Reportar sucesso após um `throw` (gate de passageiros,
+            // trigger do banco, falha de escrita) fazia a rotina esconder a
+            // própria falha.
+            try {
+              await confirmPaymentWebhook(existing.gatewayPaymentId);
+              report.items.push({
+                bookingId: booking.id,
+                reference: booking.reference,
+                customerId: booking.customerId,
+                tripId: booking.tripId,
+                balance: info.balance,
+                dueDate: info.dueDate,
+                status: "confirm_from_asaas",
+                detail: "Confirmado como pago via Asaas e webhook aplicado.",
+              });
+              report.confirmedExisting += 1;
+            } catch (error: unknown) {
+              const message =
+                error instanceof Error ? error.message : String(error);
+              console.error("[RECONCILE] confirmPaymentWebhook falhou:", message);
+              report.errors += 1;
+              report.items.push({
+                bookingId: booking.id,
+                reference: booking.reference,
+                customerId: booking.customerId,
+                tripId: booking.tripId,
+                balance: info.balance,
+                dueDate: info.dueDate,
+                status: "skipped",
+                detail: `Asaas reporta pago, mas a confirmacao foi recusada: ${message}`,
+              });
+            }
           } else {
             report.items.push({
               bookingId: booking.id,
