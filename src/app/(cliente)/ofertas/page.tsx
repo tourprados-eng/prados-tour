@@ -1,4 +1,5 @@
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
+import { isPublicTripVisible } from "@/lib/trips/availability";
 import { OffersGrid } from "@/components/promotions/offers-grid";
 import { Button } from "@/components/ui/button";
 
@@ -6,9 +7,9 @@ export const metadata = { title: "Ofertas" };
 
 export default async function OffersPage() {
   const store = await getRepositoryRuntime().read();
-  const trips = store.trips.filter(
-    (t) => t.status === "PUBLICADA" && !t.deletedAt,
-  );
+  // Ofertas é vitrine de venda: viagem com data vencida não pode ser
+  // oferecida. Mesma regra do resto do site público.
+  const trips = store.trips.filter((t) => isPublicTripVisible(t));
 
   return (
     <div className="section-pad">

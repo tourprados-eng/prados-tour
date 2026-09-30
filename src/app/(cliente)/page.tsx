@@ -10,6 +10,10 @@ import { OffersGrid } from "@/components/promotions/offers-grid";
 import { HomeHero } from "@/components/home/hero";
 import { PublicReviewForm } from "@/components/reviews/public-review-form";
 import { ReviewsCarousel } from "@/components/reviews/reviews-carousel";
+import {
+  isPublicTripVisible,
+  tripAvailabilityDate,
+} from "@/lib/trips/availability";
 import { DEMO_PASSWORD_HINT } from "@/lib/constants";
 
 const benefits = [
@@ -49,12 +53,13 @@ const benefits = [
 
 export default async function HomePage() {
   const [session, store] = await Promise.all([getSession(), getRepositoryRuntime().read()]);
-  const trips = store.trips.filter((t) => t.status === "PUBLICADA" && !t.deletedAt);
+  // Vitrine pública: só viagens publicadas, não excluídas e com data ainda
+  // não vencida em São Paulo. Viagem de hoje continua válida o dia inteiro.
+  const trips = store.trips.filter((t) => isPublicTripVisible(t));
   const featured = [...trips]
-    .filter((trip) => new Date(trip.date).getTime() >= Date.now())
     .sort(
       (a, b) =>
-        new Date(a.date).getTime() - new Date(b.date).getTime(),
+        tripAvailabilityDate(a).localeCompare(tripAvailabilityDate(b)),
     )
     .slice(0, 3);
   const brand = store.brand;
@@ -102,7 +107,11 @@ export default async function HomePage() {
       };
     });
 
-  const reviewTrips = trips
+  // Lista do formulário de avaliação: aqui viagens JÁ REALIZADAS devem
+  // aparecer — a avaliação é escrita depois da viagem. Usa a lista completa
+  // de publicadas, não a vitrine filtrada por data.
+  const reviewTrips = store.trips
+    .filter((t) => t.status === "PUBLICADA" && !t.deletedAt)
     .slice()
     .sort((a, b) => b.date.localeCompare(a.date))
     .map(({ id, name }) => ({ id, name }));

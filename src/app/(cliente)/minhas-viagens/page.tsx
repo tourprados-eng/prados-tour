@@ -4,6 +4,7 @@ import { requireUser } from "@/lib/auth/actions";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import { formatCurrency, formatTripDepartureDate } from "@/lib/utils";
 import { getBalanceInfo, isBookingFullyPaid } from "@/lib/payments/balance";
+import { todayInSaoPaulo, tripAvailabilityDate } from "@/lib/trips/availability";
 import { PhotoShareCard } from "@/components/gallery/photo-share-card";
 import { HomeHero } from "@/components/home/hero";
 import { Button } from "@/components/ui/button";
@@ -137,7 +138,9 @@ function BookingCard({
 export default async function MyTripsPage() {
   const session = await requireUser();
   const store = await getRepositoryRuntime().read();
-  const today = new Date().toISOString().slice(0, 10);
+  // Dia civil de São Paulo, não UTC: entre 21:00 e 23:59 (horário de SP) o
+  // UTC já virou o dia seguinte e a viagem de hoje cairia em "histórico".
+  const today = todayInSaoPaulo();
   const bookings = store.bookings.filter((b) => b.customerId === session.id);
 
   const entries = bookings.map((booking) => ({
@@ -145,13 +148,15 @@ export default async function MyTripsPage() {
     trip: store.trips.find((t) => t.id === booking.tripId),
   }));
 
+  // Histórico NUNCA é ocultado: viagem realizada continua visível aqui, com
+  // reservas, passageiros e pagamentos preservados.
   const upcoming = entries
-    .filter(({ trip }) => trip && (trip.departureDate ?? trip.date) >= today)
-    .sort((a, b) => (a.trip!.departureDate ?? a.trip!.date).localeCompare(b.trip!.departureDate ?? b.trip!.date));
+    .filter(({ trip }) => trip && tripAvailabilityDate(trip) >= today)
+    .sort((a, b) => tripAvailabilityDate(a.trip!).localeCompare(tripAvailabilityDate(b.trip!)));
 
   const history = entries
-    .filter(({ trip }) => !trip || (trip.departureDate ?? trip.date) < today)
-    .sort((a, b) => (b.trip?.departureDate ?? b.trip?.date ?? "").localeCompare(a.trip?.departureDate ?? a.trip?.date ?? ""));
+    .filter(({ trip }) => !trip || tripAvailabilityDate(trip) < today)
+    .sort((a, b) => tripAvailabilityDate(b.trip ?? { date: "" }).localeCompare(tripAvailabilityDate(a.trip ?? { date: "" })));
 
   const eligibleTrips = store.trips
     .filter(

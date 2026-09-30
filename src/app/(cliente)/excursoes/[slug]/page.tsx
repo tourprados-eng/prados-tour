@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { existsSync } from "fs";
 import path from "path";
-import { getTripBySlug } from "@/lib/booking/actions";
+import { getPublicTripState } from "@/lib/booking/actions";
 import { formatCurrency, formatDate, formatTime, formatTripDepartureDate, formatTripReturn } from "@/lib/utils";
 import { tripCategoryLabel } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ import {
   promotionSummary,
 } from "@/lib/pricing";
 import { TripGallery } from "@/components/trips/trip-gallery";
+import { TripAlreadyRealized } from "@/components/trips/trip-already-realized";
 import { ReviewForm } from "@/components/reviews/review-form";
 
 export default async function TripDetailPage({
@@ -23,8 +24,17 @@ export default async function TripDetailPage({
   params: Promise<{ slug: string }>;
 }) {
   const { slug } = await params;
-  const data = await getTripBySlug(slug);
-  if (!data) notFound();
+  const publicState = await getPublicTripState(slug);
+
+  // Viagem realizada: continua acessível por URL antiga, mas sem preço,
+  // sem pontos de embarque e — sobretudo — sem caminho de reserva.
+  if (publicState.status === "REALIZADA") {
+    return <TripAlreadyRealized trip={publicState.trip} />;
+  }
+
+  if (publicState.status === "INDISPONIVEL") notFound();
+
+  const data = publicState.data;
   const { trip, boarding } = data;
   const session = await getSession();
   const reserveHref = session
