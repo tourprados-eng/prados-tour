@@ -307,6 +307,67 @@ export async function processAsaasPaymentEvent(
     }
 
     if (eventName === "PAYMENT_CONFIRMED") {
+      // Consulta o status remoto antes de decidir se apenas registra ou confirma.
+      // Alguns ambientes do Asaas enviam PAYMENT_CONFIRMED com status já RECEIVED/CONFIRMED.
+      stage = "remote_charge";
+      try {
+        const remoteCharge = await getAsaasPayment(internalPayment.gatewayPaymentId!);
+        if (ASAAS_RECEIVED_STATUSES.has(remoteCharge.status)) {
+          // Verifica consistência antes de confirmar (valor/referência)
+          const expectedExternalReference =
+            internalPayment.asaasExternalReference ?? `PRADOS-TOUR:${internalPayment.id}`;
+          const payloadValue = typeof rawPayment.value === "number" ? rawPayment.value : null;
+          const externalReference =
+            typeof rawPayment.externalReference === "string" && rawPayment.externalReference.length > 0
+              ? rawPayment.externalReference
+              : null;
+
+          if (
+            (externalReference === null || externalReference === expectedExternalReference) &&
+            (payloadValue === null || Math.abs(payloadValue - Number(internalPayment.amount)) <= MONEY_TOLERANCE) &&
+            (remoteCharge.externalReference == null || remoteCharge.externalReference === expectedExternalReference) &&
+            Math.abs(Number(remoteCharge.value) - Number(internalPayment.amount)) <= MONEY_TOLERANCE
+          ) {
+            // Valida passageiros antes de confirmar
+            stage = "read_store";
+            const store = await getRepositoryRuntime().read();
+            const booking = store.bookings.find((b) => b.id === internalPayment.bookingId);
+            if (booking) {
+              stage = "passenger_validation";
+              const issues = collectPassengerIssuesForQuantity(
+                store.passengers.filter((p) => p.bookingId === booking.id),
+                booking.quantity,
+              );
+              if (issues.length === 0) {
+                stage = "confirm_payment";
+                await confirmPaymentWebhook(internalPayment.gatewayPaymentId!);
+                stage = "complete_event";
+                await completeAsaasWebhookEvent(eventId);
+                logWebhook("info", "ASAAS WEBHOOK CONFIRMADO", {
+                  ...context,
+                  stage,
+                  outcome: "confirmed",
+                });
+                return { status: "confirmed" };
+              } else {
+                await notifyIncompletePassengers(booking, issues);
+                await completeAsaasWebhookEvent(eventId);
+                logWebhook("info", "ASAAS WEBHOOK IGNORADO", {
+                  ...context,
+                  stage,
+                  outcome: "passenger_data_incomplete",
+                });
+                return { status: "ignored", reason: "passenger_data_incomplete" };
+              }
+            }
+          }
+        }
+      } catch (error) {
+        // Se não conseguir consultar o Asaas agora, libera para retry (não completa)
+        await releaseAsaasWebhookEvent(eventId).catch(() => undefined);
+        throw tagStage(error, stage);
+      }
+
       await completeAsaasWebhookEvent(eventId);
       logWebhook("info", "ASAAS WEBHOOK REGISTRADO", {
         ...context,
@@ -394,7 +455,7 @@ export async function processAsaasPaymentEvent(
     }
 
     stage = "remote_charge";
-    const remoteCharge = await getAsaasPayment(internalPayment.gatewayPaymentId);
+    const remoteCharge = await getAsaasPayment(internalPayment.gatewayPaymentId!);
     if (!ASAAS_RECEIVED_STATUSES.has(remoteCharge.status)) {
       throw new Error(`Cobrança no Asaas ainda não recebida: ${remoteCharge.status}`);
     }
@@ -423,7 +484,7 @@ export async function processAsaasPaymentEvent(
     }
 
     stage = "confirm_payment";
-    await confirmPaymentWebhook(internalPayment.gatewayPaymentId);
+    await confirmPaymentWebhook(internalPayment.gatewayPaymentId!);
     stage = "complete_event";
     await completeAsaasWebhookEvent(eventId);
     logWebhook("info", "ASAAS WEBHOOK CONFIRMADO", { ...context, stage, outcome: "confirmed" });
