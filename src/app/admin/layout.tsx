@@ -29,8 +29,13 @@ export default async function AdminLayout({
     <div className="min-h-screen bg-[#F7F4F5]">
       <div className="mx-auto flex max-w-[1500px]">
 
-        <aside className="hidden min-h-screen w-64 shrink-0 border-r border-[#E8DFE3] bg-white lg:block">
-          <div className="sticky top-0 p-5">
+        {/* A <aside> é a janela de altura fixa do menu; a div interna é o
+            container rolável. Antes o sticky estava no container do conteúdo:
+            com o menu mais alto que a viewport, sticky não tem efeito (o
+            elemento sticky precisa ser menor que a viewport) e o menu inteiro
+            rolava junto com a página. */}
+        <aside className="hidden w-64 shrink-0 border-r border-[#E8DFE3] bg-white lg:sticky lg:top-0 lg:block lg:h-screen">
+          <div className="h-full overflow-y-auto overflow-x-hidden overscroll-contain p-5">
 
             <div className="mb-6 rounded-2xl bg-[#FFF0F6] p-4">
               <p className="text-xs font-bold uppercase tracking-wider text-[#E84C91]">
