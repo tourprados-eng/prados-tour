@@ -2,6 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import { WhatsAppIcon } from "@/components/layout/whatsapp-icon";
+import { cn } from "@/lib/utils";
 
 export type WhatsAppFloatOption = {
   id: string;
@@ -87,26 +88,40 @@ export function WhatsAppFloat({
           </div>
 
           <div className="grid gap-2 p-3">
-            {options.map((option) => (
+            {options.map((option, index) => (
               <a
                 key={option.id}
                 href={option.href}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={() => setOpen(false)}
-                className="group flex items-center gap-3 rounded-2xl p-3 transition hover:bg-brand-tint"
+                aria-label={`${option.title} no WhatsApp - ${option.description}`}
+                className={cn(
+                  "group flex items-center gap-3 rounded-2xl p-3.5 transition hover:bg-brand-tint",
+                  index > 0 && "border-t border-brand-line/60 pt-3.5",
+                )}
               >
                 <span className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-[#25D366]/15 text-[#25D366] transition group-hover:bg-[#25D366] group-hover:text-white">
                   <WhatsAppIcon className="h-5 w-5" />
                 </span>
-                <span className="min-w-0">
+                <span className="min-w-0 flex-1">
                   <span className="block text-sm font-bold text-brand-ink">
                     {option.title}
                   </span>
-                  <span className="block truncate text-xs text-brand-muted">
+                  <span className="block text-xs text-brand-muted">
                     {option.description}
                   </span>
                 </span>
+                <svg
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2.2"
+                  className="h-4 w-4 shrink-0 text-brand-faint transition group-hover:translate-x-0.5 group-hover:text-brand-primary"
+                  aria-hidden="true"
+                >
+                  <path strokeLinecap="round" strokeLinejoin="round" d="M9 6l6 6-6 6" />
+                </svg>
               </a>
             ))}
           </div>
@@ -116,7 +131,7 @@ export function WhatsAppFloat({
           aria-hidden="true"
           className="rounded-full bg-white px-3.5 py-2 text-xs font-bold text-brand-ink shadow-[0_6px_18px_rgba(0,0,0,0.12)] ring-1 ring-black/5"
         >
-          Como podemos ajudar?
+          Fale conosco
         </span>
       )}
 
