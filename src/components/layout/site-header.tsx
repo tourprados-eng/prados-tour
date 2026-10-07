@@ -5,7 +5,7 @@ import { getSession } from "@/lib/auth/session";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import { Button } from "@/components/ui/button";
 import { UserMenu } from "@/components/layout/user-menu";
-import { WhatsAppIcon } from "@/components/layout/site-footer";
+import { WhatsAppIcon } from "@/components/layout/whatsapp-icon";
 
 const publicLinks = [
   { href: "/", label: "Início" },
@@ -69,11 +69,12 @@ export async function SiteHeader({ whatsappHref }: { whatsappHref?: string | nul
                 href={whatsappHref}
                 target="_blank"
                 rel="noopener noreferrer"
-                aria-label="Falar no WhatsApp"
-                title="Falar no WhatsApp"
-                className="hidden h-10 w-10 shrink-0 place-items-center rounded-full text-brand-muted transition hover:bg-brand-tint hover:text-brand-primary md:grid"
+                aria-label="Falar no WhatsApp - Reservas e dúvidas"
+                title="Falar no WhatsApp - Reservas e dúvidas"
+                className="hidden h-10 shrink-0 place-items-center gap-1.5 rounded-full px-3 text-brand-muted transition hover:bg-brand-tint hover:text-brand-primary md:inline-flex md:items-center"
               >
                 <WhatsAppIcon className="h-5 w-5" />
+                <span className="hidden text-xs font-bold lg:inline">WhatsApp</span>
               </a>
             ) : null}
             {session ? (
