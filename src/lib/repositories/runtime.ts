@@ -27,6 +27,7 @@ export type RepositoryRuntime = {
   getTripBoardingPoints(): Promise<DataStore["tripBoardingPoints"]>;
   getSeats(): Promise<DataStore["seats"]>;
   getSellers(): Promise<DataStore["sellers"]>;
+  getContacts(): Promise<DataStore["contacts"]>;
   getBookings(): Promise<DataStore["bookings"]>;
   getPassengers(): Promise<DataStore["passengers"]>;
   getPayments(): Promise<DataStore["payments"]>;
@@ -79,6 +80,7 @@ export function getRepositoryRuntime(): RepositoryRuntime {
     getTripBoardingPoints: () => repository.read().then((s) => s.tripBoardingPoints),
     getSeats: () => repository.read().then((s) => s.seats),
     getSellers: () => repository.read().then((s) => s.sellers),
+    getContacts: () => repository.read().then((s) => s.contacts),
     getBookings: () => repository.read().then((s) => s.bookings),
     getPassengers: () => repository.read().then((s) => s.passengers),
     getPayments: () => repository.read().then((s) => s.payments),

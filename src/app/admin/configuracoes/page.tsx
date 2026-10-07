@@ -11,10 +11,11 @@ import {
   uploadBrandImage,
 } from "@/lib/admin/actions";
 import { getSession } from "@/lib/auth/session";
-import { buildWhatsAppUrl } from "@/lib/contact";
+import { buildWhatsAppUrl, getContactProfile } from "@/lib/contact";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import { Button } from "@/components/ui/button";
 import { BoardingPointsManager } from "@/components/admin/boarding-points-manager";
+import { ContactsManager } from "@/components/admin/contacts-manager";
 import { Input, Label, Textarea } from "@/components/ui/form";
 
 export const metadata = { title: "Configurações | Administração" };
@@ -28,6 +29,7 @@ export default async function AdminSettingsPage() {
   const store = await getRepositoryRuntime().read();
   const brand = store.brand;
   const payment = store.paymentSettings;
+  const contactProfile = await getContactProfile();
 
   return (
     <div>
@@ -123,12 +125,18 @@ export default async function AdminSettingsPage() {
             <p className="mt-2 text-xs text-black/50">
               Link de contato:{" "}
               <a
-                href={buildWhatsAppUrl(brand.whatsapp, brand.whatsappMessage)}
+                href={buildWhatsAppUrl(
+                  contactProfile.whatsapp,
+                  contactProfile.whatsappMessage,
+                )}
                 target="_blank"
                 rel="noreferrer"
                 className="break-all font-semibold text-[var(--brand-primary)]"
               >
-                {buildWhatsAppUrl(brand.whatsapp, brand.whatsappMessage)}
+                {buildWhatsAppUrl(
+                  contactProfile.whatsapp,
+                  contactProfile.whatsappMessage,
+                )}
               </a>
             </p>
           </div>
@@ -460,6 +468,7 @@ export default async function AdminSettingsPage() {
         </form>
       </section>
       <BoardingPointsManager points={store.boardingPoints} />
+      <ContactsManager contacts={store.contacts ?? []} />
 
     </div>
   );

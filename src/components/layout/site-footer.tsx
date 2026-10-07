@@ -8,7 +8,6 @@ import {
   Mail,
   Phone,
 } from "lucide-react";
-import { buildWhatsAppUrl } from "@/lib/contact";
 import type { BrandSettings } from "@/types";
 
 const nav = [
@@ -23,9 +22,11 @@ const nav = [
 
 const CNPJ = "54.316.091/0001-06";
 const CADASTUR = "54.316.091/0001-06";
-const PHONE = "(11) 99863-9502";
+// Número mascarado exibido no rodapé. O contato real (com DDI e link) vem do
+// Admin pela prop whatsappHref; o fallback é o número histórico do site.
+const FALLBACK_PHONE = "(11) 99863-9502";
 
-function WhatsAppIcon({ className = "h-5 w-5" }: { className?: string }) {
+export function WhatsAppIcon({ className = "h-5 w-5" }: { className?: string }) {
   return (
     <svg
       viewBox="0 0 24 24"
@@ -61,7 +62,17 @@ function InstagramIcon({ className = "h-5 w-5" }: { className?: string }) {
   );
 }
 
-export function SiteFooter({ brand }: { brand: BrandSettings }) {
+export function SiteFooter({
+  brand,
+  whatsappHref,
+  phoneFormatted,
+}: {
+  brand: BrandSettings;
+  whatsappHref?: string | null;
+  phoneFormatted?: string | null;
+}) {
+  const PHONE = phoneFormatted?.trim() || FALLBACK_PHONE;
+
   return (
     <footer className="mt-12">
       {/* LINHA SUPERIOR */}
@@ -241,17 +252,16 @@ export function SiteFooter({ brand }: { brand: BrandSettings }) {
               </li>
             </ul>
 
-            <Link
-              href={buildWhatsAppUrl(
-                brand.whatsapp,
-                brand.whatsappMessage,
-              )}
-              className="mt-6 inline-flex items-center gap-3 rounded-full bg-brand-primary px-7 py-3.5 text-sm font-extrabold !text-white shadow-[0_10px_25px_rgba(232,76,145,0.28)] transition duration-300 hover:-translate-y-1 hover:bg-brand-deep hover:shadow-[0_14px_30px_rgba(232,76,145,0.35)]"
-            >
-              <WhatsAppIcon className="h-6 w-6" />
-              Falar no WhatsApp
-              <span className="ml-1 text-xl">→</span>
-            </Link>
+            {whatsappHref ? (
+              <Link
+                href={whatsappHref}
+                className="mt-6 inline-flex items-center gap-3 rounded-full bg-brand-primary px-7 py-3.5 text-sm font-extrabold !text-white shadow-[0_10px_25px_rgba(232,76,145,0.28)] transition duration-300 hover:-translate-y-1 hover:bg-brand-deep hover:shadow-[0_14px_30px_rgba(232,76,145,0.35)]"
+              >
+                <WhatsAppIcon className="h-6 w-6" />
+                Falar no WhatsApp
+                <span className="ml-1 text-xl">→</span>
+              </Link>
+            ) : null}
           </div>
 
           {/* FRASE */}

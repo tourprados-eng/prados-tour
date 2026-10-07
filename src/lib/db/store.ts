@@ -13,6 +13,10 @@ function normalizeStore(store: DataStore): DataStore {
   store.promotions ??= [];
   store.promotionUsages ??= [];
   store.galleryPhotos ??= [];
+  // Contatos: store.json antigo não tem a coleção. Sem contato principal
+  // aproveitamos o WhatsApp já gravado em brand, para o site não ficar sem
+  // botão nenhum enquanto o Admin não cadastra nenhum contato.
+  store.contacts ??= [];
 
   // Normaliza viagens com campos novos (compatibilidade com store.json antigo).
   for (const trip of store.trips ?? []) {

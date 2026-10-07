@@ -5,6 +5,7 @@ import { getSession } from "@/lib/auth/session";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import { Button } from "@/components/ui/button";
 import { UserMenu } from "@/components/layout/user-menu";
+import { WhatsAppIcon } from "@/components/layout/site-footer";
 
 const publicLinks = [
   { href: "/", label: "Início" },
@@ -14,7 +15,7 @@ const publicLinks = [
   { href: "/contato", label: "Contato" },
 ];
 
-export async function SiteHeader() {
+export async function SiteHeader({ whatsappHref }: { whatsappHref?: string | null }) {
   const [session, store] = await Promise.all([getSession(), getRepositoryRuntime().read()]);
   const brand = store.brand;
 
@@ -63,6 +64,18 @@ export async function SiteHeader() {
           </nav>
 
           <div className="flex shrink-0 items-center gap-2">
+            {whatsappHref ? (
+              <a
+                href={whatsappHref}
+                target="_blank"
+                rel="noopener noreferrer"
+                aria-label="Falar no WhatsApp"
+                title="Falar no WhatsApp"
+                className="hidden h-10 w-10 shrink-0 place-items-center rounded-full text-brand-muted transition hover:bg-brand-tint hover:text-brand-primary md:grid"
+              >
+                <WhatsAppIcon className="h-5 w-5" />
+              </a>
+            ) : null}
             {session ? (
               <UserMenu fullName={session.fullName} email={session.email} role={session.role} />
             ) : (

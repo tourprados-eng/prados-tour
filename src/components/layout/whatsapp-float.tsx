@@ -1,16 +1,10 @@
-import { getRepositoryRuntime } from "@/lib/repositories/runtime";
-import { buildWhatsAppUrl } from "@/lib/contact";
-
 /**
  * Botão flutuante de WhatsApp exibido em todas as páginas públicas.
- * Usa o número institucional configurado no Admin (brand.whatsapp).
+ * Aponta para o contato de Reservas e dúvidas (atendimento comercial), já
+ * resolvido no layout com a mensagem adequada ao cliente logado.
  */
-export async function WhatsAppFloat() {
-  const store = await getRepositoryRuntime().read();
-  const phone = store.brand.whatsapp;
-  if (!phone) return null;
-
-  const href = buildWhatsAppUrl(phone, store.brand.whatsappMessage ?? undefined);
+export function WhatsAppFloat({ whatsappHref }: { whatsappHref?: string | null }) {
+  if (!whatsappHref) return null;
 
   return (
     <div className="fixed bottom-20 right-4 z-[60] flex flex-col items-end gap-2.5 md:bottom-6 md:right-6">
@@ -21,7 +15,7 @@ export async function WhatsAppFloat() {
         Fale conosco
       </span>
       <a
-        href={href}
+        href={whatsappHref}
         target="_blank"
         rel="noopener noreferrer"
         aria-label="Fale conosco no WhatsApp"

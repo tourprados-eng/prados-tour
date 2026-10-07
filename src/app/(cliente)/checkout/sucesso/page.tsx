@@ -8,7 +8,7 @@ import { formatCurrency, formatDate, formatTripDepartureDate } from "@/lib/utils
 import { Button } from "@/components/ui/button";
 import { PixCopyButton } from "@/components/checkout/pix-copy-button";
 import { simulateGatewayConfirm } from "@/lib/booking/actions";
-import { buildWhatsAppUrl } from "@/lib/contact";
+import { buildWhatsAppUrl, getContactProfile } from "@/lib/contact";
 import { PostPaymentForm } from "@/components/checkout/post-payment-form";
 
 export default async function CheckoutSuccessPage({
@@ -20,6 +20,7 @@ export default async function CheckoutSuccessPage({
   if (!bookingId) notFound();
   const session = await getSession();
   const store = await getRepositoryRuntime().read();
+  const profile = await getContactProfile();
   const booking = store.bookings.find((b) => b.id === bookingId);
   if (!booking) notFound();
   if (
@@ -123,7 +124,7 @@ export default async function CheckoutSuccessPage({
             <div className="mt-3">
               <Button
                 href={buildWhatsAppUrl(
-                  store.brand.whatsapp,
+                  profile.whatsapp,
                   `Quero pagar a reserva ${booking.reference}`,
                 )}
                 variant="secondary"

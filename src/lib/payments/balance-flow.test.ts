@@ -251,6 +251,7 @@ function emptyStore(): DataStore {
     tripBoardingPoints: [],
     seats: [],
     sellers: [],
+    contacts: [],
     bookings: [],
     passengers: [],
     payments: [],

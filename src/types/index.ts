@@ -127,6 +127,43 @@ export interface Seller {
   commissionRate: number;
 }
 
+/** Canal de um contato institucional. */
+export type ContactKind = "whatsapp" | "email" | "telefone";
+
+/**
+ * Finalidade de um contato: cada função do site abrir o WhatsApp no número
+ * correspondente à sua finalidade. A união é extensível — novas finalidades
+ * podem ser adicionadas sem quebrar os botões existentes.
+ */
+export type ContactPurpose = "suporte" | "reservas" | "geral";
+
+/**
+ * Contato institucional do site. O número é guardado em formato nacional
+ * (só dígitos, com DDD) e o DDI fica em countryCode: o link do WhatsApp é
+ * montado com os dois (55 + 11971653517 = wa.me/5511971653517).
+ */
+export interface Contact {
+  id: string;
+  name: string;
+  kind: ContactKind;
+  /** Finalidade: decide para qual número cada botão do site aponta. */
+  purpose: ContactPurpose;
+  /** Nacional, apenas dígitos, com DDD. `null` para contatos só de e-mail. */
+  phone: string | null;
+  /** Código do país, sem o sinal de mais. Ex.: "55". */
+  countryCode: string;
+  email: string | null;
+  /** Texto pré-preenchido ao abrir a conversa. */
+  autoMessage: string | null;
+  /** Exibido como contato principal nas páginas públicas. Só um pode ser. */
+  isPrimary: boolean;
+  /** Inativo some das páginas públicas, mas fica preservado no Admin. */
+  isActive: boolean;
+  sortOrder: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface Booking {
   id: string;
   reference: string;
@@ -419,6 +456,7 @@ export interface DataStore {
   tripBoardingPoints: TripBoardingPoint[];
   seats: Seat[];
   sellers: Seller[];
+  contacts: Contact[];
   bookings: Booking[];
   passengers: BookingPassenger[];
   payments: Payment[];

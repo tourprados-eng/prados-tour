@@ -101,6 +101,7 @@ const COLLECTION_TABLE: Record<string, { table: string; conflictKey: string; del
   tripBoardingPoints: { table: "trip_boarding_points", conflictKey: "id", deleteColumn: "id" },
   seats: { table: "seats", conflictKey: "id", deleteColumn: "id" },
   sellers: { table: "sellers", conflictKey: "id", deleteColumn: "id" },
+  contacts: { table: "contacts", conflictKey: "id", deleteColumn: "id" },
   bookings: { table: "bookings", conflictKey: "id", deleteColumn: "id" },
   passengers: { table: "booking_passengers", conflictKey: "id", deleteColumn: "id" },
   payments: { table: "payments", conflictKey: "id", deleteColumn: "id" },
@@ -151,6 +152,7 @@ const DELETE_ORDER = [
   "coupons",
   "promotions",
   "profiles",
+  "contacts",
 ];
 
 const UPSERT_ORDER = [...DELETE_ORDER].reverse();

@@ -109,7 +109,10 @@ describe("prepareGalleryImage — a foto do cliente nunca é cortada", () => {
   it("respeita a orientação EXIF sem cortar (foto deitada vira retrato)", async () => {
     // Celular fotografado deitado: os metadados EXIF mandam girar 90°.
     // `autoOrient()` precisa girar, e a proporção tem que sobreviver.
-    const landscape = await makeImage({ width: 4000, height: 3000 });
+    // Dimensões de uma foto real de celular, sem exagero: a orientação não
+    // depende da resolução e o encode de 12MP estourava o timeout quando a
+    // suíte roda com vários workers em paralelo.
+    const landscape = await makeImage({ width: 1200, height: 900 });
 
     const comExif = await sharp(landscape)
       .withMetadata({ orientation: 6 })
@@ -119,7 +122,7 @@ describe("prepareGalleryImage — a foto do cliente nunca é cortada", () => {
     const preparado = await prepareGalleryImage(comExif);
     const resultado = await readImageSize(preparado);
 
-    expect(resultado).toEqual({ width: 3000, height: 4000 });
+    expect(resultado).toEqual({ width: 900, height: 1200 });
   });
 
   it("devolve um JPEG válido e legível", async () => {

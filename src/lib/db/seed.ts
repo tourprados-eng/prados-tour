@@ -284,6 +284,8 @@ export async function createSeedStore(): Promise<DataStore> {
   }
 
   const bookingId = uuid();
+  const contactId = uuid();
+  const reservasContactId = uuid();
   const passengerId = uuid();
   const seat = seats.find((s) => s.tripId === trip1)!;
   seat.state = "OCUPADO";
@@ -296,6 +298,40 @@ export async function createSeedStore(): Promise<DataStore> {
     tripBoardingPoints,
     seats,
     sellers: [{ id: sellerId, code: "VD001", commissionRate: 0.1 }],
+    contacts: [
+      {
+        id: contactId,
+        name: "Suporte do site",
+        kind: "whatsapp",
+        purpose: "suporte",
+        phone: "11971653517",
+        countryCode: "55",
+        email: null,
+        autoMessage:
+          "Olá! Meu nome é [NOME DO CLIENTE]. Vim pelo site da Prado's Tour e preciso de ajuda!",
+        isPrimary: true,
+        isActive: true,
+        sortOrder: 0,
+        createdAt: now,
+        updatedAt: now,
+      },
+      {
+        id: reservasContactId,
+        name: "Reservas e dúvidas",
+        kind: "whatsapp",
+        purpose: "reservas",
+        phone: "11998639502",
+        countryCode: "55",
+        email: null,
+        autoMessage:
+          "Olá! Meu nome é [NOME DO CLIENTE]. Estou com dúvidas e gostaria de mais informações sobre as viagens da Prado's Tour.",
+        isPrimary: false,
+        isActive: true,
+        sortOrder: 1,
+        createdAt: now,
+        updatedAt: now,
+      },
+    ],
     bookings: [
       {
         id: bookingId,

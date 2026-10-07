@@ -8,7 +8,12 @@ import { tripCategoryLabel } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import { getSession } from "@/lib/auth/session";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
-import { buildWhatsAppUrl, withTripInfo } from "@/lib/contact";
+import {
+  buildWhatsAppUrl,
+  getContactProfile,
+  messageForPurpose,
+  withTripInfo,
+} from "@/lib/contact";
 import {
   bestPromotionForTrip,
   eligiblePromotions,
@@ -42,6 +47,16 @@ export default async function TripDetailPage({
     : `/login?next=/checkout?trip=${trip.slug}`;
 
   const store = await getRepositoryRuntime().read();
+  const profile = await getContactProfile();
+  // "Tirar dúvida" é atendimento comercial → Reservas e dúvidas.
+  const customerName = session?.fullName ?? "";
+  const whatsappHref = profile.reservas
+    ? buildWhatsAppUrl(
+        profile.reservas.phone,
+        withTripInfo(messageForPurpose("reservas", customerName), trip),
+        profile.reservas.countryCode,
+      )
+    : null;
   const promotion = bestPromotionForTrip(
     store,
     trip,
@@ -163,10 +178,7 @@ export default async function TripDetailPage({
                   Reservar agora
                 </Button>
                 <Button
-                  href={buildWhatsAppUrl(
-                    store.brand.whatsapp,
-                    withTripInfo(store.brand.whatsappMessage ?? "", trip),
-                  )}
+                  href={whatsappHref ?? "/contato"}
                   variant="outline"
                   size="lg"
                 >

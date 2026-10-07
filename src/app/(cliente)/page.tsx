@@ -2,7 +2,11 @@ import Image from "next/image";
 import { ShieldCheck, Bus, Ticket, HeartHandshake, Check } from "lucide-react";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import { getSession } from "@/lib/auth/session";
-import { buildWhatsAppUrl } from "@/lib/contact";
+import {
+  buildWhatsAppUrl,
+  getContactProfile,
+  messageForPurpose,
+} from "@/lib/contact";
 import { Button } from "@/components/ui/button";
 import { ClientGalleryCarousel } from "@/components/gallery/client-gallery-carousel";
 import { TripCard } from "@/components/trips/trip-card";
@@ -63,6 +67,15 @@ export default async function HomePage() {
     )
     .slice(0, 3);
   const brand = store.brand;
+  const profile = await getContactProfile();
+  // CTA da home é atendimento comercial → Reservas e dúvidas.
+  const whatsappHref = profile.reservas
+    ? buildWhatsAppUrl(
+        profile.reservas.phone,
+        messageForPurpose("reservas", session?.fullName ?? ""),
+        profile.reservas.countryCode,
+      )
+    : null;
   const banner = store.promoBanner;
   const clientGallery = store.galleryPhotos
     .filter((photo) => photo.status === "APROVADO" && photo.showOnHome)
@@ -403,7 +416,7 @@ export default async function HomePage() {
                   Reservar agora
                 </Button>
                 <Button
-                  href={buildWhatsAppUrl(brand.whatsapp, brand.whatsappMessage)}
+                  href={whatsappHref ?? "/contato"}
                   size="lg"
                   className="border border-white/50 bg-transparent text-white hover:bg-white/10 focus-visible:ring-white"
                 >
