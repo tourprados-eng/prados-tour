@@ -8,8 +8,8 @@ import { formatCurrency, formatDate, formatTripDepartureDate } from "@/lib/utils
 import { Button } from "@/components/ui/button";
 import { PixCopyButton } from "@/components/checkout/pix-copy-button";
 import { simulateGatewayConfirm } from "@/lib/booking/actions";
-import { buildWhatsAppUrl, getContactProfile } from "@/lib/contact";
-import { PostPaymentForm } from "@/components/checkout/post-payment-form";
+import { storedCardInvoiceUrl } from "@/lib/payments/asaas";
+import { CardPaymentLinkButton } from "@/components/checkout/card-payment-link-button";
 
 export default async function CheckoutSuccessPage({
   searchParams,
@@ -20,8 +20,8 @@ export default async function CheckoutSuccessPage({
   if (!bookingId) notFound();
   const session = await getSession();
   const store = await getRepositoryRuntime().read();
-  const profile = await getContactProfile();
   const booking = store.bookings.find((b) => b.id === bookingId);
+  const payment = store.payments.find((p) => p.bookingId === booking?.id);
   if (!booking) notFound();
   if (
     session &&
@@ -51,7 +51,10 @@ export default async function CheckoutSuccessPage({
       </div>
     );
   }
-  const payment = store.payments.find((p) => p.bookingId === booking.id);
+  const invoiceUrl =
+    payment?.method === "CARTAO"
+      ? storedCardInvoiceUrl(payment.metadata)
+      : null;
   const balance = store.installments.find(
     (i) => i.bookingId === booking.id && i.number === 2 && i.status === "PENDENTE",
   );
@@ -117,33 +120,10 @@ export default async function CheckoutSuccessPage({
         )}
 
         {payment?.method === "CARTAO" && payment?.status === "PENDENTE" && (
-          <div className="mt-8 rounded-2xl bg-pink-50 p-4 text-sm">
-            Cartão: o atendimento de{" "}
-            {store.brand.companyName || "Prado's Tour"} finalizará a cobrança
-            pelo WhatsApp. O status só muda após a confirmação do pagamento.
-            <div className="mt-3">
-              <Button
-                href={buildWhatsAppUrl(
-                  profile.whatsapp,
-                  `Quero pagar a reserva ${booking.reference}`,
-                )}
-                variant="secondary"
-              >
-                Falar no WhatsApp
-              </Button>
-            </div>
+          <div className="mt-8">
+            <CardPaymentLinkButton invoiceUrl={invoiceUrl} />
           </div>
         )}
-
-        {booking.status === "CONFIRMADA" &&
-          trip.formRequired &&
-          trip.formUrl &&
-          !booking.formConfirmedAt && (
-            <PostPaymentForm
-              bookingId={booking.id}
-              formUrl={trip.formUrl}
-            />
-          )}
 
         <div className="mt-8 flex flex-wrap gap-3">
           {booking.status === "CONFIRMADA" &&

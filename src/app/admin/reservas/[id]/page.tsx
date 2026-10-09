@@ -5,6 +5,7 @@ import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import { getBalanceInfo } from "@/lib/payments/balance";
 import { formatCurrency, formatDate, formatTripDepartureDate } from "@/lib/utils";
 import { BalancePaymentButton } from "@/components/payments/balance-payment-button";
+import { CardInvoiceLink } from "@/components/admin/card-invoice-link";
 
 function formatDateTime(value: string | null | undefined) {
   if (!value) return "Não informado";
@@ -298,6 +299,22 @@ export default async function AdminReservaDetalhesPage({
                   · {balanceInfo.balancePayment.status} ·{" "}
                   {formatCurrency(balanceInfo.balancePayment.amount)}
                 </p>
+              )}
+
+              {payment?.method === "CARTAO" && payment.gatewayPaymentId && (
+                <p className="mt-2 text-xs text-black/50">
+                  Asaas charge ID: {payment.gatewayPaymentId}
+                </p>
+              )}
+
+              {payment?.method === "CARTAO" && (
+                <p className="mt-2 text-xs text-black/50">
+                  Parcelas: {installments.length || (typeof payment.metadata?.cardInstallments === "number" ? Number(payment.metadata.cardInstallments) : 1)}x
+                </p>
+              )}
+
+              {payment?.method === "CARTAO" && payment.metadata && typeof payment.metadata.invoiceUrl === "string" && payment.metadata.invoiceUrl && (
+                <CardInvoiceLink invoiceUrl={payment.metadata.invoiceUrl} />
               )}
 
               {showBalanceAction ? (

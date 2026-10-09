@@ -25,8 +25,11 @@ import {
 } from "@/lib/trips/availability";
 import type { DataStore, Payment, PaymentMethod, PaymentPlan, Trip } from "@/types";
 import {
+  asaasInvoiceUrl,
+  createAsaasCardPayment,
   createAsaasPixPayment,
   findAsaasPaymentByExternalReference,
+  getAsaasPayment,
   getAsaasPixQrCode,
   getOrCreateAsaasCustomer,
 } from "@/lib/payments/asaas";
@@ -134,10 +137,13 @@ export async function createBookingAction(input: CheckoutInput) {
   }
 
   const isPixPayment = input.paymentMethod === "PIX";
-  let paymentId = isPixPayment ? pixPaymentId(input, session.id) : uuid();
+  const isCardPayment = input.paymentMethod === "CARTAO";
+  let paymentId = isPixPayment
+    ? pixPaymentId(input, session.id)
+    : cardPaymentId(input, session.id);
   let claimWon = false;
 
-  if (isPixPayment) {
+  if (isPixPayment || isCardPayment) {
     // Retoma uma reserva PENDENTE já existente para esta viagem com o MESMO
     // conjunto de passageiros (CPFs) e plano, caso uma tentativa anterior
     // tenha criado a reserva mas falhado na cobrança. Isso evita reservas
@@ -155,8 +161,12 @@ export async function createBookingAction(input: CheckoutInput) {
 
     if (resumable) {
       paymentId = resumable.clientRequestId
-        ? pixPaymentIdFromClientRequestId(resumable.clientRequestId)
-        : pixPaymentIdFromBookingId(resumable.id);
+        ? isPixPayment
+          ? pixPaymentIdFromClientRequestId(resumable.clientRequestId)
+          : cardPaymentIdFromClientRequestId(resumable.clientRequestId)
+        : isPixPayment
+          ? pixPaymentIdFromBookingId(resumable.id)
+          : cardPaymentIdFromBookingId(resumable.id);
     }
 
     const gate = await gatePixClaim(paymentId, session.id, input.tripId);
@@ -168,9 +178,15 @@ export async function createBookingAction(input: CheckoutInput) {
           ? gate.claim.bookingId
           : null;
       if (completedId) {
-        const adopted = await ensureAsaasPixPayment(completedId, paymentId, {
-          responsibleEmail: input.responsibleEmail,
-        });
+        const adopted =
+          isPixPayment
+            ? await ensureAsaasPixPayment(completedId, paymentId, {
+                responsibleEmail: input.responsibleEmail,
+              })
+            : await ensureAsaasCardPayment(completedId, paymentId, {
+                installmentCount: input.installmentCount ?? 1,
+                responsibleEmail: input.responsibleEmail,
+              });
         revalidatePath("/");
         revalidatePath("/minhas-viagens");
         if (adopted.ok) {
@@ -179,7 +195,7 @@ export async function createBookingAction(input: CheckoutInput) {
         return {
           error:
             adopted.message ??
-            "Sua reserva está pronta. Tente abrir o PIX novamente em instantes.",
+            "Sua reserva está pronta. Tente abrir o link de pagamento novamente em instantes.",
         };
       }
       return {
@@ -413,26 +429,6 @@ export async function createBookingAction(input: CheckoutInput) {
       }
 
       if (input.paymentMethod === "CARTAO") {
-        store.payments.push({
-          id: paymentId,
-          bookingId,
-          customerId: store.bookings.find((b) => b.id === bookingId)!.customerId,
-          method: input.paymentMethod,
-          plan: input.paymentPlan,
-          amount: initial,
-          status: "PENDENTE",
-          gateway: "demo-card",
-          gatewayPaymentId: `gw_${paymentId.slice(0, 8)}`,
-          feeAmount: 0,
-          netAmount: initial,
-          paidAt: null,
-          pixCopyPaste: null,
-          metadata: { awaitingWebhook: true },
-          createdAt: now,
-        });
-      }
-
-      if (input.paymentMethod === "CARTAO") {
         const baseInstallmentValue =
           Math.floor((total / cardInstallments) * 100) / 100;
 
@@ -547,7 +543,7 @@ export async function createBookingAction(input: CheckoutInput) {
     } catch (e) {
       // Falhou antes de completar a reserva: libera a claim imediatamente
       // para que o retry possa reprocessar sem esperar o lease expirar.
-      if (isPixPayment && claimWon) {
+      if ((isPixPayment || isCardPayment) && claimWon) {
         await releasePixClaim(paymentId).catch(() => undefined);
       }
       return { error: e instanceof Error ? e.message : "Erro ao criar reserva." };
@@ -564,7 +560,24 @@ export async function createBookingAction(input: CheckoutInput) {
   revalidatePath("/minhas-viagens");
 
   if (input.paymentMethod === "CARTAO") {
-    return { bookingId, reference };
+    const card = await ensureAsaasCardPayment(bookingId, paymentId, {
+      installmentCount: input.installmentCount ?? 1,
+      responsibleEmail: input.responsibleEmail,
+    });
+
+    revalidatePath("/minhas-viagens");
+
+    if (card.ok) {
+      redirect(`/checkout/sucesso?booking=${bookingId}`);
+    }
+
+    return {
+      error:
+        card.message ??
+        "Não foi possível gerar o link de pagamento agora. Sua reserva foi criada e você pode tentar novamente.",
+      bookingId,
+      reference,
+    };
   }
 
   const pix = await ensureAsaasPixPayment(bookingId, paymentId, {
@@ -752,6 +765,9 @@ export async function simulateGatewayConfirm(paymentId: string) {
   const store = await getRepositoryRuntime().read();
   const payment = store.payments.find((p) => p.id === paymentId);
   if (!payment?.gatewayPaymentId) return { error: "Pagamento não encontrado." };
+  if (payment.method === "CARTAO" && payment.gateway === "asaas") {
+    return { error: "Confirmação manual não permitida para pagamentos de cartão via Asaas." };
+  }
   await confirmPaymentWebhook(payment.gatewayPaymentId);
   return { ok: true };
 }
@@ -912,6 +928,29 @@ function pixPaymentId(input: CheckoutInput, customerId: string): string {
 
 function pixPaymentIdFromClientRequestId(clientRequestId: string): string {
   return pixPaymentIdFromKey(`payment-pix|${clientRequestId}`);
+}
+
+function cardPaymentIdFromKey(key: string): string {
+  const hex = createHash("md5").update(key).digest("hex").slice(0, 32);
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-4${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+}
+
+function cardPaymentId(input: CheckoutInput, customerId: string): string {
+  const key = input.clientRequestId
+    ? `payment-card|${input.clientRequestId}`
+    : `payment-card|${customerId}|${input.tripId}|${input.quantity}|${input.boardingPointId}|${input.passengers
+        .map((p) => onlyDigits(p.cpf))
+        .sort()
+        .join(",")}`;
+  return cardPaymentIdFromKey(key);
+}
+
+function cardPaymentIdFromClientRequestId(clientRequestId: string): string {
+  return cardPaymentIdFromKey(`payment-card|${clientRequestId}`);
+}
+
+function cardPaymentIdFromBookingId(bookingId: string): string {
+  return cardPaymentIdFromKey(`payment-card|booking:${bookingId}`);
 }
 
 function pixPaymentIdFromBookingId(bookingId: string): string {
@@ -1149,6 +1188,66 @@ async function persistPixPayment(
   });
 }
 
+async function persistCardPayment(
+  bookingId: string,
+  paymentId: string,
+  data: {
+    chargeId: string;
+    invoiceUrl: string | null;
+    installmentCount: number;
+    responsibleEmail?: string;
+  },
+): Promise<void> {
+  await getRepositoryRuntime().transaction((store) => {
+    const booking = store.bookings.find((b) => b.id === bookingId);
+    if (!booking) {
+      throw new Error("Reserva não encontrada ao registrar o pagamento.");
+    }
+
+    const existing = store.payments.find((p) => p.bookingId === bookingId);
+    const installment1 = store.installments.find(
+      (i) => i.bookingId === bookingId && i.number === 1,
+    );
+    const amount = existing?.amount ?? installment1?.value ?? booking.totalAmount;
+    const now = new Date().toISOString();
+    const externalReference = `PRADOS-TOUR:${paymentId}`;
+
+    const metadata: Record<string, unknown> = {
+      ...(existing?.metadata ?? {}),
+      awaitingWebhook: true,
+      invoiceUrl: data.invoiceUrl,
+      cardInstallments: data.installmentCount,
+      asaasExternalReference: externalReference,
+      responsibleEmail: data.responsibleEmail?.trim() || null,
+    };
+
+    const next: Payment = {
+      id: paymentId,
+      bookingId,
+      customerId: existing?.customerId ?? booking.customerId,
+      method: "CARTAO",
+      plan: existing?.plan ?? booking.paymentPlan,
+      amount,
+      status: "PENDENTE",
+      gateway: "asaas",
+      gatewayPaymentId: data.chargeId,
+      feeAmount: 0,
+      netAmount: amount,
+      paidAt: null,
+      pixCopyPaste: null,
+      asaasExternalReference: externalReference,
+      metadata,
+      createdAt: existing?.createdAt ?? now,
+    };
+
+    if (existing) {
+      Object.assign(existing, next);
+    } else {
+      store.payments.push(next);
+    }
+  });
+}
+
 /**
  * Reconciliação + criação garantida de UMA cobrança Asaas por operação.
  * Ordem: claim atômica -> reconcile-first -> criar (só se não existir) ->
@@ -1319,6 +1418,180 @@ async function ensureAsaasPixPayment(
           "O PIX foi gerado, mas o QR Code ainda está pendente. Tente abrir a reserva novamente em instantes.",
       };
     }
+
+    completed = true;
+    return { ok: true };
+  } finally {
+    if (!completed) {
+      await releasePixClaim(paymentId).catch(() => undefined);
+    }
+  }
+}
+
+async function ensureAsaasCardPayment(
+  bookingId: string,
+  paymentId: string,
+  opts: { installmentCount: number; responsibleEmail?: string },
+): Promise<{ ok: boolean; message?: string; error?: string }> {
+  let completed = false;
+  try {
+    let store;
+    try {
+      store = await getRepositoryRuntime().read();
+    } catch (error) {
+      console.error("[ASAAS] read() falhou em ensureAsaasCardPayment:", error);
+      return { ok: false, error: "read_failed" };
+    }
+
+    const payment = store.payments.find((p) => p.bookingId === bookingId);
+    if (payment?.status === "PAGO") {
+      completed = true;
+      return { ok: true };
+    }
+
+    const booking = store.bookings.find((b) => b.id === bookingId);
+    const trip = store.trips.find((t) => t.id === booking?.tripId);
+    const profile = store.profiles.find((p) => p.id === booking?.customerId);
+    const installment1 = store.installments.find(
+      (i) => i.bookingId === bookingId && i.number === 1,
+    );
+    if (!booking || !trip || !profile) {
+      return {
+        ok: false,
+        message: "Dados da reserva incompletos para gerar o pagamento.",
+      };
+    }
+
+    const externalReference = `PRADOS-TOUR:${paymentId}`;
+    const amount = payment?.amount ?? installment1?.value ?? booking.totalAmount;
+
+    let chargeId: string | null = payment?.gatewayPaymentId ?? null;
+    let invoiceUrl: string | null =
+      (typeof payment?.metadata?.invoiceUrl === "string" && payment.metadata.invoiceUrl.trim()
+        ? payment.metadata.invoiceUrl.trim()
+        : null);
+
+    if (!chargeId) {
+      try {
+        chargeId =
+          (await findAsaasPaymentByExternalReference(externalReference))?.id ?? null;
+      } catch {
+        chargeId = null;
+      }
+    }
+
+    if (chargeId && !invoiceUrl) {
+      try {
+        const found = await findAsaasPaymentByExternalReference(externalReference);
+        if (found) {
+          invoiceUrl = asaasInvoiceUrl(found);
+        }
+      } catch {
+        // ignore reconcile failure
+      }
+    }
+
+    if (!chargeId) {
+      try {
+        const asaasCustomer = await getOrCreateAsaasCustomer({
+          name: profile.fullName,
+          cpfCnpj: profile.cpf,
+          email: opts.responsibleEmail?.trim() || profile.email,
+          mobilePhone: onlyDigits(profile.phone ?? profile.whatsapp ?? ""),
+          externalReference: `pt-customer-${booking.customerId}`,
+        });
+
+        const created = await createAsaasCardPayment({
+          customer: asaasCustomer.id,
+          billingType: "CREDIT_CARD",
+          value: amount,
+          dueDate: installment1?.dueDate ?? new Date().toISOString().slice(0, 10),
+          description: `Reserva ${booking.reference} - ${trip.name}`.slice(0, 120),
+          externalReference,
+          installmentCount: opts.installmentCount,
+        }).catch(async (error) => {
+          console.error(
+            "[ASAAS] Erro ao criar cobrança de cartão:",
+            error instanceof Error ? error.message : error,
+          );
+
+          try {
+            return (
+              (await findAsaasPaymentByExternalReference(externalReference)) ?? null
+            );
+          } catch (reconcileError) {
+            console.error(
+              "[ASAAS] Erro ao reconciliar cobrança de cartão:",
+              reconcileError instanceof Error
+                ? reconcileError.message
+                : reconcileError,
+            );
+
+            return null;
+          }
+        });
+
+        if (created) {
+          chargeId = created.id;
+          invoiceUrl = asaasInvoiceUrl(created);
+          await updatePixClaim(paymentId, { chargeId, bookingId }).catch(
+            () => undefined,
+          );
+        }
+      } catch (error) {
+        console.error("[ASAAS] Falha ao criar/reconciliar cobrança de cartão:", {
+          bookingId,
+          paymentId,
+          externalReference,
+          error: error instanceof Error ? error.message : error,
+        });
+        return {
+          ok: false,
+          message:
+            "Não foi possível gerar o link de pagamento neste momento. Sua reserva foi criada e você poderá tentar novamente em instantes.",
+        };
+      }
+    }
+
+    if (!chargeId) {
+      return {
+        ok: false,
+        message:
+          "Não foi possível gerar o link de pagamento neste momento. Sua reserva foi criada e você poderá tentar novamente em instantes.",
+      };
+    }
+
+    if (chargeId && !invoiceUrl) {
+      try {
+        const found = await getAsaasPayment(chargeId);
+        invoiceUrl = asaasInvoiceUrl(found);
+      } catch (error) {
+        console.error(
+          "[ASAAS] Erro ao obter cobrança de cartão:",
+          error instanceof Error ? error.message : error,
+        );
+      }
+    }
+
+    try {
+      await persistCardPayment(bookingId, paymentId, {
+        chargeId,
+        invoiceUrl,
+        installmentCount: opts.installmentCount,
+        responsibleEmail: opts.responsibleEmail,
+      });
+    } catch (error) {
+      console.error("[ASAAS] persistCardPayment() falhou em ensureAsaasCardPayment:", {
+        bookingId,
+        paymentId,
+        error: error instanceof Error ? error.message : error,
+      });
+      return { ok: false, error: "persist_failed" };
+    }
+
+    await completePixClaim(paymentId, { bookingId, paymentId, chargeId }).catch(
+      () => undefined,
+    );
 
     completed = true;
     return { ok: true };

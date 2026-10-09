@@ -3,7 +3,6 @@ import { getSession } from "@/lib/auth/session";
 import { getPublicTripState, getTripBySlug } from "@/lib/booking/actions";
 import { CheckoutWizard } from "@/components/checkout/checkout-wizard";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
-import { getContactProfile } from "@/lib/contact";
 
 export default async function CheckoutPage({
   searchParams,
@@ -25,7 +24,6 @@ export default async function CheckoutPage({
   }
   const store = await getRepositoryRuntime().read();
   const profile = store.profiles.find((p) => p.id === session.id);
-  const contactProfile = await getContactProfile();
 
   return (
     <CheckoutWizard
@@ -35,8 +33,6 @@ export default async function CheckoutPage({
       defaultName={profile?.fullName || session.fullName}
       defaultPhone={profile?.phone || ""}
       defaultEmail={session.email}
-      whatsapp={contactProfile.whatsapp}
-      brandName={store.brand.companyName}
     />
   );
 }

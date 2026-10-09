@@ -55,11 +55,13 @@ export type AsaasCreateCustomerInput = {
 
 export type AsaasCreatePaymentInput = {
   customer: string;
-  billingType: "PIX";
+  billingType: "PIX" | "CREDIT_CARD";
   value: number;
   dueDate: string;
   description?: string;
   externalReference: string;
+  /** Quantidade de parcelas no cartão (1..5). Omitir/1 = à vista no Asaas. */
+  installmentCount?: number;
 };
 
 export type AsaasPayment = {
@@ -80,6 +82,34 @@ export type AsaasPayment = {
 export function asaasPaymentLink(payment: { paymentUrl?: string | null; invoiceUrl?: string | null }): string | null {
   const link = payment.paymentUrl?.trim() || payment.invoiceUrl?.trim() || "";
   return link || null;
+}
+
+/** Link do checkout hospedado do Asaas (invoiceUrl, fallback paymentUrl). */
+export function asaasInvoiceUrl(payment: {
+  invoiceUrl?: string | null;
+  paymentUrl?: string | null;
+}): string | null {
+  const link = payment.invoiceUrl?.trim() || payment.paymentUrl?.trim() || "";
+  return link || null;
+}
+
+/** Lê a invoiceUrl salva no Payment (metadata) — string não-vazia ou null. */
+export function storedCardInvoiceUrl(
+  metadata: Record<string, unknown> | null | undefined,
+): string | null {
+  const value = metadata?.invoiceUrl;
+  return typeof value === "string" && value.trim() ? value.trim() : null;
+}
+
+/** Lê o número de parcelas do cartão salvo no Payment (metadata). */
+export function storedCardInstallments(
+  metadata: Record<string, unknown> | null | undefined,
+  fallback: number,
+): number {
+  const value = metadata?.cardInstallments;
+  return typeof value === "number" && Number.isInteger(value) && value >= 1
+    ? value
+    : fallback;
 }
 
 export type AsaasPixQrCode = {
@@ -505,6 +535,55 @@ export async function createAsaasPixPayment(
 
   if (description) {
     body.description = description;
+  }
+
+  return asaasPost<AsaasPayment>("/payments", body);
+}
+
+export async function createAsaasCardPayment(
+  input: AsaasCreatePaymentInput,
+): Promise<AsaasPayment> {
+  const customer = input.customer?.trim() ?? "";
+  const externalReference = input.externalReference?.trim() ?? "";
+  const description = input.description ? input.description.trim() : "";
+
+  if (!customer) {
+    throw new Error("customer é obrigatório para criar cobrança de cartão no Asaas.");
+  }
+  if (input.billingType !== "CREDIT_CARD") {
+    throw new Error('billingType deve ser "CREDIT_CARD" para criar cobrança de cartão no Asaas.');
+  }
+  if (typeof input.value !== "number" || !Number.isFinite(input.value) || input.value <= 0) {
+    throw new Error("value deve ser um número finito maior que zero.");
+  }
+  if (!ASAAS_DUE_DATE_PATTERN.test(input.dueDate)) {
+    throw new Error("dueDate deve estar no formato YYYY-MM-DD.");
+  }
+  if (!externalReference) {
+    throw new Error("externalReference é obrigatório para criar cobrança de cartão no Asaas.");
+  }
+  if (description.length > 500) {
+    throw new Error("description não pode ter mais de 500 caracteres.");
+  }
+
+  const installmentCount = input.installmentCount ?? 1;
+  if (!Number.isInteger(installmentCount) || installmentCount < 1 || installmentCount > 5) {
+    throw new Error("installmentCount deve ser um inteiro entre 1 e 5.");
+  }
+
+  const body: AsaasCreatePaymentInput = {
+    customer,
+    billingType: "CREDIT_CARD",
+    value: input.value,
+    dueDate: input.dueDate,
+    externalReference,
+  };
+
+  if (description) {
+    body.description = description;
+  }
+  if (installmentCount > 1) {
+    body.installmentCount = installmentCount;
   }
 
   return asaasPost<AsaasPayment>("/payments", body);

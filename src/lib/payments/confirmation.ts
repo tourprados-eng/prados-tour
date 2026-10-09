@@ -167,6 +167,16 @@ export async function confirmPaymentWebhook(gatewayPaymentId: string) {
       installment.paidAt = now;
       installment.method = payment.method;
     }
+
+    if (payment.method === "CARTAO" && !isBalancePayment) {
+      for (const inst of store.installments) {
+        if (inst.bookingId === payment.bookingId && inst.status !== "PAGO") {
+          inst.status = "PAGO";
+          inst.paidAt = now;
+          inst.method = payment.method;
+        }
+      }
+    }
     if (booking) {
       booking.status = "CONFIRMADA";
       booking.updatedAt = now;

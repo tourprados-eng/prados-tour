@@ -5,6 +5,8 @@ type ButtonProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
   variant?: "primary" | "secondary" | "outline" | "ghost" | "soft" | "white";
   size?: "sm" | "md" | "lg";
   href?: string;
+  target?: string;
+  rel?: string;
 };
 
 const variants: Record<NonNullable<ButtonProps["variant"]>, string> = {
@@ -48,7 +50,7 @@ export function Button({
 
   if (href) {
     return (
-      <Link href={href} className={classes}>
+      <Link href={href} className={classes} target={props.target} rel={props.rel}>
         {children}
       </Link>
     );

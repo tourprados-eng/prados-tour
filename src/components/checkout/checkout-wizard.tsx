@@ -4,7 +4,7 @@ import { useEffect, useMemo, useRef, useState, useTransition } from "react";
 import { createBookingAction, previewBookingPriceAction } from "@/lib/booking/actions";
 import { Button } from "@/components/ui/button";
 import { Input, Label, Select } from "@/components/ui/form";
-import { formatCurrency, formatTime, formatTripDepartureDate, formatTripReturn } from "@/lib/utils";
+import { formatCurrency, formatTime } from "@/lib/utils";
 import {
   collectPassengerIssuesForQuantity,
   formatCpfInput,
@@ -58,10 +58,6 @@ const steps = [
   "Confirmação",
 ];
 
-function onlyDigits(value: string): string {
-  return value.replace(/\D/g, "");
-}
-
 function isValidEmail(value: string): boolean {
   return /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value);
 }
@@ -86,8 +82,6 @@ export function CheckoutWizard({
   defaultName,
   defaultPhone,
   defaultEmail,
-  whatsapp,
-  brandName,
 }: {
   trip: Trip;
   boarding: BoardingRow[];
@@ -95,8 +89,6 @@ export function CheckoutWizard({
   defaultName: string;
   defaultPhone: string;
   defaultEmail: string;
-  whatsapp: string;
-  brandName: string;
 }) {
   const [step, setStep] = useState(0);
   const [adultText, setAdultText] = useState("");
@@ -300,7 +292,7 @@ export function CheckoutWizard({
       if (result?.error) {
         submitted.current = false;
         setError(result.error);
-        if (method === "PIX" && result?.bookingId) {
+        if ((method === "PIX" || method === "CARTAO") && result?.bookingId) {
           setFailedBookingId(result.bookingId);
           setFailedBookingRef(result.reference ?? null);
         }
@@ -308,43 +300,8 @@ export function CheckoutWizard({
       }
 
       if (method === "CARTAO" && result?.bookingId) {
-        const responsible = passengers[0];
-
-        const message = [
-          `Olá, ${brandName || "Prado’s Tour"}!`,
-          "",
-          "Acabei de realizar uma reserva pelo site e gostaria de finalizar o pagamento via cartão.",
-          "",
-          "DADOS DA RESERVA",
-          `Reserva: ${result.reference}`,
-          `Viagem: ${trip.name}`,
-          `Saída: ${formatTripDepartureDate(trip)}${trip.departureTime ? ` às ${formatTime(trip.departureTime)}` : ""}`,
-          ...(trip.returnDate || trip.returnTime
-            ? [`Retorno: ${formatTripReturn(trip)}`]
-            : []),
-          `Passageiros: ${quantity}`,
-          `Ponto de embarque: ${boarding.find((b) => b.point.id === boardingPointId)?.point.name ?? ""}`,
-          "",
-          "RESPONSÁVEL PELA RESERVA",
-          `Nome completo: ${responsible.name}`,
-          `CPF: ${responsible.cpf}`,
-          "",
-          "PAGAMENTO",
-          "Forma: Cartão",
-          `Parcelamento: ${installments}x`,
-          `Valor total: ${formatCurrency(total)}`,
-          `Valor por parcela: ${formatCurrency(
-            Math.round((total / installments) * 100) / 100,
-          )}`,
-          "",
-          "Por favor, poderiam gerar e me enviar o link de pagamento para eu finalizar minha reserva?",
-          "",
-          brandName || "Prado's Tour"
-        ].join("\n");
-
-        const whatsappNumber = onlyDigits(whatsapp);
-        window.location.href =
-          `https://wa.me/${whatsappNumber}?text=${encodeURIComponent(message)}`;
+        window.location.href = `/checkout/sucesso?booking=${result.bookingId}`;
+        return;
       }
     });
   }
