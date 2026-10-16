@@ -1,6 +1,6 @@
 import Link from "next/link";
 import Image from "next/image";
-import { Home, Compass, Tickets, User, Phone } from "lucide-react";
+import { Home, Compass, Tickets, User, Phone, Star } from "lucide-react";
 import { getSession } from "@/lib/auth/session";
 import { getRepositoryRuntime } from "@/lib/repositories/runtime";
 import { Button } from "@/components/ui/button";
@@ -12,6 +12,7 @@ const publicLinks = [
   { href: "/excursoes", label: "Excursões" },
   { href: "/ofertas", label: "Ofertas" },
   { href: "/sobre", label: "Sobre" },
+  { href: "/avaliacoes", label: "Avaliações" },
   { href: "/contato", label: "Contato" },
 ];
 
@@ -105,6 +106,7 @@ export async function MobileNav() {
   const items = [
     { href: "/", label: "Início", icon: Home },
     { href: "/excursoes", label: "Excursões", icon: Compass },
+    { href: "/avaliacoes", label: "Avaliações", icon: Star },
     { href: session ? "/minhas-viagens" : "/login", label: session ? "Viagens" : "Entrar", icon: Tickets },
     { href: session ? "/meus-vouchers" : "/criar-conta", label: session ? "Voucher" : "Conta", icon: User },
     { href: "/contato", label: "Contato", icon: Phone },
@@ -112,7 +114,7 @@ export async function MobileNav() {
 
   return (
     <nav className="fixed inset-x-0 bottom-0 z-50 border-t border-brand-line bg-white/95 pb-[env(safe-area-inset-bottom)] backdrop-blur-xl md:hidden">
-      <ul className="mx-auto grid max-w-lg grid-cols-5 gap-0.5 px-1 py-1.5">
+      <ul className="mx-auto grid max-w-lg grid-cols-6 gap-0.5 px-1 py-1.5">
         {items.map((item) => (
           <li key={item.href}>
             <Link
